@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
 
 #include "common/iwarp.h"
 #include "mpa/mpa.h"
@@ -77,6 +78,13 @@ int create_tcp_connection(struct Config* config)
             close(sockfd);
             lwlog_err("client: connect");
             continue;
+        }
+        else
+        {
+            //! Disables Nagle's algorithm
+            //! TODO: Check if this is really required.
+            int flag = 1;
+            setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
         }
         break;
     }

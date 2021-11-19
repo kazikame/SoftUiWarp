@@ -41,6 +41,12 @@
 
 #include "common/iwarp.h"
 
+//! Assuming ethernet
+#define EMSS 1460
+#define MULPDU EMSS - (6 + 4 * Ceiling(EMSS / 512) + EMSS % 4)
+//!
+extern int mpa_protocol_version;
+
 /**
  * @brief sends an MPA request/reply
  * 
@@ -71,5 +77,7 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info);
  * @return int number of bytes received, < 0 if error
  */
 int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_recv);
+
+int mpa_send(int sockfd, void* ulpdu, int len, int flags);
 
 #endif
