@@ -4,7 +4,7 @@
 
 #define MAX_BUF_LEN 1024
 
-void print_mpa_rr(struct mpa_rr* hdr, char* buf)
+void print_mpa_rr(const struct mpa_rr* hdr, char* buf)
 {
     struct mpa_rr_params* params = &hdr->params;
     if (strncmp(MPA_KEY_REQ, hdr->key, MPA_RR_KEY_LEN) || strncmp(MPA_KEY_REP, hdr->key, MPA_RR_KEY_LEN))

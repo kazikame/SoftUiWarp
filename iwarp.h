@@ -79,7 +79,7 @@ struct mpa_rr {
 	__u8	key[MPA_RR_KEY_LEN];
 	struct mpa_rr_params params;
 };
-void print_mpa_rr(struct mpa_rr*, char*);
+void print_mpa_rr(const struct mpa_rr*, char*);
 
 static inline void __mpa_rr_set_revision(__u16 *bits, __u8 rev)
 {

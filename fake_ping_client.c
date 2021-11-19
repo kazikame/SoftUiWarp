@@ -19,6 +19,7 @@
 #define FPDU_MAX_SIZE ULPDU_MAX_SIZE + 2 + CRC_SIZE
 
 static char doc[] = "Fake rdma ping which implements iWARP";
+static char log_buf[1024];
 
 struct Config
 {
@@ -127,6 +128,9 @@ int send_mpa_rr(int sockfd, const void* pdata, __u8 pd_len, int req)
     msg.msg_iov = iov;
     msg.msg_iovlen = 3;
 
+    print_mpa_rr(&hdr, log_buf);
+    lwlog_info("Sending Message:\n%s", log_buf);
+
     int ret = sendmsg(sockfd, &msg, 0);
     return ret;
 }
@@ -153,6 +157,9 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
         return -1;
     }
 
+    print_mpa_rr(&hdr, log_buf);
+    lwlog_info("Received Message:\n%s", log_buf);
+    
     __u16 pd_len = __be16_to_cpu(hdr->params.pd_len);
 
     //! private data length is 0
