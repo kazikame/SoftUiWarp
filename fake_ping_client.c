@@ -99,7 +99,7 @@ int send_mpa_rr(int sockfd, const void* pdata, __u8 pd_len, int req)
     memset(&hdr, 0, sizeof hdr);
 
     strncpy(hdr.key, req ? MPA_KEY_REQ : MPA_KEY_REP, MPA_RR_KEY_LEN);
-    int version = MPA_REVISION_2;
+    int version = MPA_REVISION_1;
     __mpa_rr_set_revision(&hdr.params.bits, version);
 
     hdr.params.pd_len = __cpu_to_be16(pd_len);
@@ -126,7 +126,7 @@ int send_mpa_rr(int sockfd, const void* pdata, __u8 pd_len, int req)
     }
 
     msg.msg_iov = iov;
-    msg.msg_iovlen = 3;
+    msg.msg_iovlen = iovec_num+1;
 
     print_mpa_rr(&hdr, log_buf);
     lwlog_info("Sending Message:\n%s", log_buf);
@@ -157,40 +157,43 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
         return -1;
     }
 
-    print_mpa_rr(&hdr, log_buf);
+    print_mpa_rr(hdr, log_buf);
     lwlog_info("Received Message:\n%s", log_buf);
 
     __u16 pd_len = __be16_to_cpu(hdr->params.pd_len);
 
-    //! private data length is 0
+    //! private data length is 0, and is request
     if (!pd_len)
     {
-        //! ensure that no redundant data has been sent!
-        int garbage;
-        rcvd = recv(sockfd, (char *)&garbage, sizeof(garbage), MSG_DONTWAIT);
-
-        //! No data on socket, the peer is protocol compliant :)
-        if (rcvd == -EAGAIN) return 0;
-
-        if (rcvd > 0)
+        //! If received request, ensure no garbage data is sent
+        if (!strncmp(MPA_KEY_REQ, hdr->key, MPA_RR_KEY_LEN))
         {
-            lwlog_err("recv_mpa_rr: peer sent extra data after req/resp");
-            return rcvd;
+             int garbage;
+            rcvd = recv(sockfd, (char *)&garbage, sizeof(garbage), MSG_DONTWAIT);
+
+            //! No data on socket, the peer is protocol compliant :)
+            if (rcvd == -EAGAIN) return 0;
+
+            if (rcvd > 0)
+            {
+                lwlog_err("recv_mpa_rr: peer sent extra data after req/resp");
+                return rcvd;
+            }
+
+            if (rcvd < 0)
+            {
+                lwlog_err("recv_mpa_rr: connection error after header received");
+                return rcvd;
+            }
+
+            if (rcvd == 0)
+            {
+                lwlog_err("recv_mpa_rr: peer EOF");
+                return -EPIPE;
+            }
         }
 
-        if (rcvd < 0)
-        {
-            lwlog_err("recv_mpa_rr: connection error after header received");
-            return rcvd;
-        }
-
-        if (rcvd == 0)
-        {
-            lwlog_err("recv_mpa_rr: peer EOF");
-			return -EPIPE;
-        }
-
-        //! unreachable
+        return sizeof(struct mpa_rr);
     }
 
     //! private data length is nonzero. Must allocate private data.
@@ -218,7 +221,7 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
         return -EPROTO;
     }
 
-    lwlog_info("MPA req/rep received pd_len: %d, pdata: %d", pd_len, info->pdata);
+    lwlog_info("MPA req/rep received pd_len: %d, pdata: %d", pd_len, *((int*)info->pdata));
     return rcvd;
 }
 
@@ -261,14 +264,14 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    __u32 num_send = 65537;
+    __u32 num_send = __cpu_to_be32(65537);
     __u32 num_recv = 0;
-    mpa_client_connect(sockfd, &num_send, sizeof(num_send), &num_recv);
+    mpa_client_connect(sockfd, NULL, 0, &num_recv);
 
     if (num_recv != num_send)
     {
-        lwlog_error("weird private data in response: %d", num_recv);
+        lwlog_err("weird private data in response: %d", num_recv);
     }
-
+    sleep(10);
     close(sockfd);
 }

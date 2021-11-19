@@ -6,7 +6,7 @@
 
 void print_mpa_rr(const struct mpa_rr* hdr, char* buf)
 {
-    struct mpa_rr_params* params = &hdr->params;
+    const struct mpa_rr_params* params = &hdr->params;
     if (strncmp(MPA_KEY_REQ, hdr->key, MPA_RR_KEY_LEN) || strncmp(MPA_KEY_REP, hdr->key, MPA_RR_KEY_LEN))
     {
         snprintf(buf, 1024, "iWARP MPA RR Header\n"
