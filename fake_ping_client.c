@@ -159,7 +159,7 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
 
     print_mpa_rr(&hdr, log_buf);
     lwlog_info("Received Message:\n%s", log_buf);
-    
+
     __u16 pd_len = __be16_to_cpu(hdr->params.pd_len);
 
     //! private data length is 0
@@ -194,6 +194,7 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
     }
 
     //! private data length is nonzero. Must allocate private data.
+    //! TODO: this is basically a memory leak. remove
     if (!info->pdata)
     {
         info->pdata = malloc(pd_len + 4);
@@ -221,6 +222,32 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
     return rcvd;
 }
 
+/**
+ * @brief 
+ * 
+ * @param sockfd TCP connection socket
+ * @param pdata_send private data to be sent
+ * @param pd_len length of private data to be sent
+ * @param pdata_recv private data to be received. Must be large enough to hold
+ * @return int number of bytes received, < 0 if error
+ */
+int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_recv)
+{
+    int ret = send_mpa_rr(sockfd, pdata_send, pd_len, 1);
+    if (ret < 0) return ret;
+
+    struct siw_mpa_info* info = malloc(sizeof(struct siw_mpa_info));
+    if (!info)
+    {
+        lwlog_err("out of memory");
+        return -1;
+    }
+    info->pdata = pdata_recv;
+    
+    ret = recv_mpa_rr(sockfd, info);
+    return ret;
+}
+
 int main(int argc, char **argv)
 {
     //! TODO: Use a better argparse library
@@ -234,8 +261,14 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    __u32 num = 65537;
-    send_mpa_rr(sockfd, (char *)&num, sizeof(__u32), 1);
+    __u32 num_send = 65537;
+    __u32 num_recv = 0;
+    mpa_client_connect(sockfd, &num_send, sizeof(num_send), &num_recv);
+
+    if (num_recv != num_send)
+    {
+        lwlog_error("weird private data in response: %d", num_recv);
+    }
 
     close(sockfd);
 }
