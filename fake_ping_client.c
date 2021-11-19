@@ -162,11 +162,12 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
 
     __u16 pd_len = __be16_to_cpu(hdr->params.pd_len);
 
+    int is_req = strncmp(MPA_KEY_REQ, hdr->key, MPA_RR_KEY_LEN) == 0;
     //! private data length is 0, and is request
     if (!pd_len)
     {
         //! If received request, ensure no garbage data is sent
-        if (!strncmp(MPA_KEY_REQ, hdr->key, MPA_RR_KEY_LEN))
+        if (is_req)
         {
              int garbage;
             rcvd = recv(sockfd, (char *)&garbage, sizeof(garbage), MSG_DONTWAIT);
@@ -208,7 +209,8 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
         }
     }
 
-    rcvd = recv(sockfd, info->pdata, pd_len + 4, MSG_DONTWAIT);
+
+    rcvd = recv(sockfd, info->pdata, is_req ? pd_len + 4 : pd_len, MSG_DONTWAIT);
 
     if (rcvd < 0)
     {
@@ -264,14 +266,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    __u32 num_send = __cpu_to_be32(65537);
-    __u32 num_recv = 0;
-    mpa_client_connect(sockfd, NULL, 0, &num_recv);
+    mpa_client_connect(sockfd, NULL, 0, NULL);
 
-    if (num_recv != num_send)
-    {
-        lwlog_err("weird private data in response: %d", num_recv);
-    }
-    sleep(10);
     close(sockfd);
 }
