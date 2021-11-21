@@ -40,7 +40,6 @@
 #ifndef _IWARP_H
 #define _IWARP_H
 
-#include <rdma/rdma_user_cm.h>	/* RDMA_MAX_PRIVATE_DATA */
 #include <linux/types.h>
 #include <asm/byteorder.h>
 
@@ -120,9 +119,6 @@ struct mpa_trailer {
 	char	pad[4];
 	__be32	crc;
 };
-
-#define MPA_HDR_SIZE	2
-#define MPA_CRC_SIZE	4
 
 
 /*
@@ -401,7 +397,7 @@ struct siw_mpa_info {
 struct siw_mpa_packet {
 	__u16 ulpdu_len;
 	char *ulpdu;
-	char *crc;
+	__u32 crc;
 	int bytes_rcvd;
 };
 

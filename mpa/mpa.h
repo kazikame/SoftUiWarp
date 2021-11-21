@@ -43,7 +43,11 @@
 
 //! Assuming ethernet
 #define EMSS 1460
-#define MULPDU EMSS - (6 + 4 * Ceiling(EMSS / 512) + EMSS % 4)
+#define MULPDU EMSS - (6 + 4 * (EMSS / 512 + 1) + EMSS % 4)
+
+#define MPA_HDR_SIZE	2
+#define MPA_CRC_SIZE	4
+
 //!
 extern int mpa_protocol_version;
 
@@ -56,7 +60,7 @@ extern int mpa_protocol_version;
  * @param req 0 if response, else request
  * @return int number of total bytes sent, negative if failed
  */
-int send_mpa_rr(int sockfd, const void* pdata, __u8 pd_len, int req);
+int mpa_send_rr(int sockfd, const void* pdata, __u8 pd_len, int req);
 
 /**
  * @brief receives an MPA request/reply
@@ -65,7 +69,7 @@ int send_mpa_rr(int sockfd, const void* pdata, __u8 pd_len, int req);
  * @param info request/reply struct in which data is received. Must be allocated
  * @return int number of bytes received, < 0 if error
  */
-int recv_mpa_rr(int sockfd, struct siw_mpa_info* info);
+int mpa_recv_rr(int sockfd, struct siw_mpa_info* info);
 
 /**
  * @brief 
@@ -78,8 +82,28 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info);
  */
 int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_recv);
 
+/**
+ * @brief sends an MPA packet
+ * 
+ * ulpdu size must be in bytes.
+ * 
+ * @param sockfd TCP socket connection
+ * @param ulpdu MPA packet payload
+ * @param len MPA packet payload length. Must fit in 2 octets.
+ * @param flags 
+ * @return int 
+ */
 int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags);
 
-int mpa_recv(int sockfd, void* ulpdu, int* len);
+/**
+ * @brief receives an MPA packet
+ * 
+ * info struct must be pointing to valid memory
+ * 
+ * @param sockfd TCP socket connection
+ * @param info pointer to packet struct
+ * @return int numbers of bytes received, negative if error
+ */
+int mpa_recv(int sockfd, struct siw_mpa_packet* info);
 
 #endif

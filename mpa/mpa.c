@@ -55,7 +55,7 @@
 char log_buf[1024];
 int mpa_protocol_version = 1;
 
-int send_mpa_rr(int sockfd, const void* pdata, __u8 pd_len, int req)
+int mpa_send_rr(int sockfd, const void* pdata, __u8 pd_len, int req)
 {
     //! Make MPA request header
     struct mpa_rr hdr;
@@ -98,7 +98,7 @@ int send_mpa_rr(int sockfd, const void* pdata, __u8 pd_len, int req)
     return ret;
 }
 
-int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
+int mpa_recv_rr(int sockfd, struct siw_mpa_info* info)
 {
     int bytes_rcvd = 0;
 
@@ -109,7 +109,7 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
 
     if (rcvd < sizeof(struct mpa_rr))
     {
-        lwlog_err("recv_mpa_rr: didn't receive enough bytes");
+        lwlog_err("mpa_recv_rr: didn't receive enough bytes");
         return -1;
     }
 
@@ -133,19 +133,19 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
 
             if (rcvd > 0)
             {
-                lwlog_err("recv_mpa_rr: peer sent extra data after req/resp");
+                lwlog_err("mpa_recv_rr: peer sent extra data after req/resp");
                 return rcvd;
             }
 
             if (rcvd < 0)
             {
-                lwlog_err("recv_mpa_rr: connection error after header received");
+                lwlog_err("mpa_recv_rr: connection error after header received");
                 return rcvd;
             }
 
             if (rcvd == 0)
             {
-                lwlog_err("recv_mpa_rr: peer EOF");
+                lwlog_err("mpa_recv_rr: peer EOF");
                 return -EPIPE;
             }
         }
@@ -160,7 +160,7 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
         info->pdata = malloc(pd_len + 4);
         if (!info->pdata)
         {
-            lwlog_err("recv_mpa_rr: out of memory");
+            lwlog_err("mpa_recv_rr: out of memory");
             return -ENOMEM;
         }
     }
@@ -170,12 +170,12 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
 
     if (rcvd < 0)
     {
-        lwlog_err("recv_mpa_rr: connection error after trying to get private data");
+        lwlog_err("mpa_recv_rr: connection error after trying to get private data");
         return rcvd;
     }
     if (rcvd > pd_len)
     {
-        lwlog_err("recv_mpa_rr: received more than private data length");
+        lwlog_err("mpa_recv_rr: received more than private data length");
         return -EPROTO;
     }
 
@@ -186,7 +186,7 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
 //! TODO: Add config options to choose CRC, Markers, etc.
 int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_recv)
 {
-    int ret = send_mpa_rr(sockfd, pdata_send, pd_len, 1);
+    int ret = mpa_send_rr(sockfd, pdata_send, pd_len, 1);
     if (ret < 0) return ret;
 
     struct siw_mpa_info* info = malloc(sizeof(struct siw_mpa_info));
@@ -197,24 +197,13 @@ int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_re
     }
     info->pdata = pdata_recv;
     
-    ret = recv_mpa_rr(sockfd, info);
+    ret = mpa_recv_rr(sockfd, info);
 
     mpa_protocol_version = __mpa_rr_revision(info->hdr.params.bits);
     free(info);
     return ret;
 }
 
-/**
- * @brief sends an MPA packet
- * 
- * ulpdu size must be in bytes.
- * 
- * @param sockfd TCP socket connection
- * @param ulpdu MPA packet payload
- * @param len MPA packet payload length. Must fit in 2 octets.
- * @param flags 
- * @return int 
- */
 int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags)
 {
     //! Make sendmsg() msg struct
@@ -262,7 +251,54 @@ int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags)
     return ret;
 }
 
-int mpa_recv(int sockfd, void* ulpdu, int* len)
+int mpa_recv(int sockfd, struct siw_mpa_packet* info)
 {
-    
+    int bytes_rcvd = 0;
+
+    //! Get header
+    int rcvd = recv(sockfd, &info->ulpdu_len, MPA_HDR_SIZE, 0);
+
+    if (rcvd < sizeof(__u16))
+    {
+        lwlog_err("mpa_recv: didn't receive enough bytes");
+        return -1;
+    }
+    bytes_rcvd += rcvd;
+
+    int packet_len = ntohs(info->ulpdu_len);
+    lwlog_info("Received MPA Message Header: %d", packet_len);
+
+    if (packet_len <= 0)
+    {
+        lwlog_err("mpa_recv: packet header is %d", packet_len);
+        return -2;
+    }
+
+    //! Get payload
+    int padding_len = (sizeof(packet_len) + packet_len) % 4;
+    int payload_len = packet_len + padding_len;
+    rcvd = recv(sockfd, info->ulpdu, payload_len, 0);
+
+    if (rcvd != payload_len)
+    {
+        lwlog_err("mpa_recv: didn't receive enough bytes after header (%d)", rcvd);
+        return -1;
+    }
+    bytes_rcvd += rcvd;
+
+    //! Get crc
+    rcvd = recv(sockfd, &info->crc, MPA_CRC_SIZE, 0);
+
+    if (rcvd != MPA_CRC_SIZE)
+    {
+        lwlog_err("mpa_recv: didn't receive enough bytes for crc (%d)", rcvd);
+        return -1;
+    }
+    bytes_rcvd += rcvd;
+
+    //! TODO: Check CRC
+
+    info->bytes_rcvd = bytes_rcvd;
+
+    return bytes_rcvd;
 }
