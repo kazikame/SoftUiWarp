@@ -80,4 +80,6 @@ int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_re
 
 int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags);
 
+int mpa_recv(int sockfd, void* ulpdu, int* len);
+
 #endif

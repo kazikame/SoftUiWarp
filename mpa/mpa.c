@@ -221,7 +221,7 @@ int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags)
     struct msghdr msg;
     memset(&msg, 0, sizeof(msg));
 
-    struct iovec iov[5];
+    struct iovec iov[6];
     int iovec_num = 0;
 
     //! MPA Header
@@ -246,11 +246,17 @@ int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags)
     }
 
     //! TODO: Add support for CRC
+    __u32 crc = 0;
+    iov[iovec_num].iov_base = &crc;
+    iov[iovec_num].iov_len = sizeof(crc);
+    iovec_num++;
+
     //! TODO: Add support for markers
 
     msg.msg_iov = iov;
-    msg.msg_iovlen = iovec_num+1;
+    msg.msg_iovlen = iovec_num;
     lwlog_info("MPA Packet Header: %d", ntohs(mpa_len));
+    lwlog_info("MPA Packet CRC: %d", ntohs(crc));
     
     int ret = sendmsg(sockfd, &msg, 0);
     return ret;
