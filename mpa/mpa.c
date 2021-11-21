@@ -183,6 +183,7 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info)
     return rcvd;
 }
 
+//! TODO: Add config options to choose CRC, Markers, etc.
 int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_recv)
 {
     int ret = send_mpa_rr(sockfd, pdata_send, pd_len, 1);
@@ -203,8 +204,59 @@ int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_re
     return ret;
 }
 
-//! TODO: Complete
-int mpa_send(int sockfd, void* ulpdu, int len, int flags)
+/**
+ * @brief sends an MPA packet
+ * 
+ * ulpdu size must be in bytes.
+ * 
+ * @param sockfd TCP socket connection
+ * @param ulpdu MPA packet payload
+ * @param len MPA packet payload length. Must fit in 2 octets.
+ * @param flags 
+ * @return int 
+ */
+int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags)
 {
-    return 0;
+    //! Make sendmsg() msg struct
+    struct msghdr msg;
+    memset(&msg, 0, sizeof(msg));
+
+    struct iovec iov[5];
+    int iovec_num = 0;
+
+    //! MPA Header
+    __be16 mpa_len = htons(len);
+    iov[iovec_num].iov_base = &mpa_len;
+    iov[iovec_num].iov_len = sizeof(mpa_len);
+    iovec_num++;
+
+    //! ULPDU
+    iov[iovec_num].iov_base = ulpdu;
+    iov[iovec_num].iov_len = len;
+    iovec_num++;
+
+    //! Padding
+    int padding_bytes = (len + sizeof(mpa_len)) % 4;
+    __u8 pad = 0;
+    for (int i = 0; i < padding_bytes; i++)
+    {
+            iov[iovec_num].iov_base = &pad;
+            iov[iovec_num].iov_len = sizeof(pad);
+            iovec_num++;
+    }
+
+    //! TODO: Add support for CRC
+    //! TODO: Add support for markers
+
+    msg.msg_iov = iov;
+    msg.msg_iovlen = iovec_num+1;
+    lwlog_info("MPA Packet Header: %d", ntohs(mpa_len));
+    
+    int ret = sendmsg(sockfd, &msg, 0);
+    return ret;
+}
+
+int mpa_recv(int sockfd, void* ulpdu, int* len)
+{
+    
 }

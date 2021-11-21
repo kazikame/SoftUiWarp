@@ -113,6 +113,9 @@ int main(int argc, char **argv)
         lwlog_err("closing connection");
         close(sockfd);
     }
-
+    sleep(10);
     //! Send some stuff
+    int garbage = 5;
+    ret = mpa_send(sockfd, &garbage, sizeof(int), 0);
+    sleep(10);
 }

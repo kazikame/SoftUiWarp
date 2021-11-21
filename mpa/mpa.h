@@ -78,6 +78,6 @@ int recv_mpa_rr(int sockfd, struct siw_mpa_info* info);
  */
 int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_recv);
 
-int mpa_send(int sockfd, void* ulpdu, int len, int flags);
+int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags);
 
 #endif

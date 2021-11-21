@@ -395,4 +395,14 @@ struct siw_mpa_info {
 	int			bytes_rcvd;
 };
 
+/*
+ * MPA packet in host byte order
+ */
+struct siw_mpa_packet {
+	__u16 ulpdu_len;
+	char *ulpdu;
+	char *crc;
+	int bytes_rcvd;
+};
+
 #endif
