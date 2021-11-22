@@ -156,8 +156,7 @@ const char *ibv_get_device_name(struct ibv_device *device) {
 __be64 ibv_get_device_guid(struct ibv_device *device) {
 	printf("ibv_get_device_guid\n");
     if (suiw_is_device_softuiwarp(device)) {
-        // TODO is there any significance to this value, or can we just use anything here?
-        return htobe64(0xdeadbeef);
+        return suiw_get_device_guid(device);
     } else {
         return real_get_device_guid(device);
     }
@@ -220,7 +219,11 @@ void ibv_ack_async_event(struct ibv_async_event *event) {
 int ibv_query_device(struct ibv_context *context,
 		     struct ibv_device_attr *device_attr) {
 	printf("ibv_query_device\n");
-	return -1;
+    if (suiw_is_device_softuiwarp(context->device)) {
+        return suiw_query_device(context, device_attr);
+    } else {
+        return real_query_device(context, device_attr);
+    }
 }
 
 /**

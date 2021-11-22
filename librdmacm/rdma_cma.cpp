@@ -35,6 +35,8 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 
+#include "softuiwarp.h"
+
 #include "rdma_cma.h"
 
 /* Real library symbols; bound in `init` when this library is loaded. */
@@ -86,7 +88,7 @@ static void (*real_freeaddrinfo)(struct rdma_addrinfo*) = NULL;
  */
 struct rdma_event_channel *rdma_create_event_channel(void) {
 	printf("rdma_create_event_channel\n");
-	return NULL;
+    return suiw_create_event_channel();
 }
 
 /**
@@ -103,6 +105,7 @@ struct rdma_event_channel *rdma_create_event_channel(void) {
  */
 void rdma_destroy_event_channel(struct rdma_event_channel *channel) {
 	printf("rdma_destroy_event_channel\n");
+    suiw_destroy_event_channel(channel);
 }
 
 /**
@@ -130,7 +133,7 @@ int rdma_create_id(struct rdma_event_channel *channel,
 		   struct rdma_cm_id **id, void *context,
 		   enum rdma_port_space ps) {
 	printf("rdma_create_id\n");
-	return -1;
+	return suiw_create_id(channel, id, context, ps);
 }
 
 /**
@@ -189,7 +192,7 @@ void rdma_destroy_ep(struct rdma_cm_id *id) {
  */
 int rdma_destroy_id(struct rdma_cm_id *id) {
 	printf("rdma_destroy_id\n");
-	return -1;
+    return suiw_destroy_id(id);
 }
 
 /**
@@ -239,9 +242,8 @@ int rdma_bind_addr(struct rdma_cm_id *id, struct sockaddr *addr) {
 int rdma_resolve_addr(struct rdma_cm_id *id, struct sockaddr *src_addr,
 		      struct sockaddr *dst_addr, int timeout_ms) {
 	printf("rdma_resolve_addr\n");
-	return -1;
+    return suiw_resolve_addr(id, src_addr, dst_addr, timeout_ms);
 }
-
 
 /**
  * rdma_resolve_route - Resolve the route information needed to establish a connection.
@@ -259,7 +261,7 @@ int rdma_resolve_addr(struct rdma_cm_id *id, struct sockaddr *src_addr,
  */
 int rdma_resolve_route(struct rdma_cm_id *id, int timeout_ms) {
 	printf("rdma_resolve_route\n");
-	return -1;
+	return suiw_resolve_route(id, timeout_ms);
 }
 
 /**
@@ -569,7 +571,7 @@ int rdma_join_multicast_ex(struct rdma_cm_id *id,
 int rdma_get_cm_event(struct rdma_event_channel *channel,
 		      struct rdma_cm_event **event) {
 	printf("rdma_get_cm_event\n");
-	return -1;
+    return suiw_get_cm_event(channel, event);
 }
 
 /**
@@ -584,7 +586,7 @@ int rdma_get_cm_event(struct rdma_event_channel *channel,
  */
 int rdma_ack_cm_event(struct rdma_cm_event *event) {
 	printf("rdma_ack_cm_event\n");
-	return -1;
+	return suiw_ack_cm_event(event);
 }
 
 __be16 rdma_get_src_port(struct rdma_cm_id *id) {

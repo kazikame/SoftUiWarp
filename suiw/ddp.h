@@ -128,6 +128,7 @@ struct stag_t {
 };
 
 struct ddp_stream_context* ddp_init_stream(int sockfd, struct pd* pd_id);
+
 void ddp_kill_stream(struct ddp_stream_context*);
 
 int register_stag(struct stag_t* tag);
@@ -139,6 +140,7 @@ int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* packet);
 int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, __u32 offset, void* data, __u32 len);
 
 //! Register Queues
+
 
 //! Untagged send/recv
 
