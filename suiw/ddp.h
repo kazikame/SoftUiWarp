@@ -78,35 +78,46 @@ Basically:
  */
 #include <linux/types.h>
 #include <asm/byteorder.h>
-
+#include <stdint.h>
+#include<iostream>
+#include<map>
+#include<queue>
+#include<pair>
 #define DDP_TAGGED_HDR_SIZE 14
 #define DDP_UNTAGGED_HDR_SIZE 18
-
+#define MULPDU 1500 //const mulpdu for now
+#define TAGGED_BUFFERS_NUM 5 //TODO: change for ULP to define number of buffer
+#define UNTAGGED_BUFFERS_NUM 5 //TODO: change for ULP to define number of buffer
+#define TAGGED_BUFFER_SIZE 1000000 //TODO: change for ULP to define number of buffer
+#define UNTAGGED_BUFFER_SIZE 1000000 //TODO: change for ULP to define number of buffer
+#define MOD32 = 4294967296
 struct ddp_tagged_hdr {
-    __u8 reserved;
-    __u32 stag;
-    __u64 to;
+    uint8_t reserved;
+    uint8_t reservedULP; //is this requireed here or only in ULP?
+    uint32_t stag;
+    uint64_t to;
 };
 
 struct ddp_untagged_hdr {
-    __u8 reserved;
-    __u32 reserved2;
-    __u32 qn;
-    __u32 msn;
-    __u32 mo;
+    uint8_t reserved;
+    uint8_t reservedULP;
+    uint32_t reserved2;
+    uint32_t qn;
+    uint32_t msn;
+    uint32_t mo;
 };
 
 struct ddp_hdr {
-    __u8 ctrl;
+    uint8_t ctrl; //what's this?
     union {
-        struct ddp_tagged_hdr tagged;
-        struct ddp_untagged_hdr untagged;
+        struct ddp_tagged_hdr* tagged;
+        struct ddp_untagged_hdr* untagged;
     };
 };
 
 /* only for receiving */
 struct ddp_packet {
-    struct ddp_hdr hdr;
+    struct ddp_hdr* hdr;
     char* data;
 };
 
@@ -114,34 +125,49 @@ struct ddp_packet {
 
 
 struct pd {
-    __u32 pd_id;
+    uint32_t pd_id;
 };
 
 struct ddp_stream_context {
     int sockfd;
-    struct pd pd_id;
+    struct pd* pd_id;
 };
 
 struct stag_t {
-    __u32 id;
-    struct pd pd_id;
+    uint32_t id;
+    struct pd* pd_id;
 };
 
+map<uint32_t,uint32_t> tag_to_pd;
+
+queue<char*> tagged_buffer[TAGGED_BUFFERS_NUM];
+queue<char*> untagged_buffer[UNTAGGED_BUFFERS_NUM];
+
+map<uint8_t, pair<u_int32_t, pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
+map<uint64_t, pair<u_int32_t, pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
+
 struct ddp_stream_context* ddp_init_stream(int sockfd, struct pd* pd_id);
-void ddp_kill_stream(struct ddp_stream_context*);
+
+void ddp_kill_stream(struct ddp_stream_context* ctx);
 
 int register_stag(struct stag_t* tag);
+
+void register_tagged_buffer();
+
+void register_untagged_buffer();
 
 //! Check validity (stag, etc.)
 int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* packet);
 
 //! Fragementation + Send
-int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, __u32 offset, void* data, __u32 len);
+int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint32_t offset, void* data, uint32_t len, uint8_t rsrvdULP);
 
 //! Register Queues
-
+void register_tagged_queue(queue<ddp_packet*> *tagged_buffer);
+void register_untagged_queue(queue<ddp_packet*> *untagged_buffer);
 //! Untagged send/recv
-
+int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* data, 
+                    uint32_t len, uint64_t reserved, uint32_t qn, uint32_t msn);
 //! TODO: Test fake_ping_client by sending the next Send/Read Request data
 
 #endif

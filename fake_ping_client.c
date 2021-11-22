@@ -13,6 +13,7 @@
 
 #include "common/iwarp.h"
 #include "mpa/mpa.h"
+#include "suiw/ddp.h"
 
 #include "lwlog.h"
 
@@ -115,7 +116,19 @@ int main(int argc, char **argv)
     }
     sleep(10);
     //! Send some stuff
-    int garbage = 5;
-    ret = mpa_send(sockfd, &garbage, sizeof(int), 0);
+    // int garbage = 5;
+    // ret = mpa_send(sockfd, &garbage, sizeof(int), 0);
+    struct ddp_stream_context* ctx = ddp_init_stream(int sockfd, struct pd* pd_id);
+    struct stag_t* stag;
+    stag->pd_id = ctx->pd_id->pd_id;
+    stag->id = 1;
+    register_stag(stag);
+    register_tagged_buffer();
+    char* data = new char[10];
+    for(int i = 0;i<10;i++){
+        data[i] = 't';
+    }
+    ddp_tagged_send(ctx, stag, 0, data, 10, 1);
+    printf("done\n");
     sleep(10);
 }
