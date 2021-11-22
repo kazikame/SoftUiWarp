@@ -79,13 +79,13 @@ Basically:
 #include <linux/types.h>
 #include <asm/byteorder.h>
 #include <stdint.h>
-#include<iostream>
-#include<map>
-#include<queue>
-#include<pair>
+#include <stdio.h>
+//#include <map>
+//#include <queue>
+//#include <pair>
 #define DDP_TAGGED_HDR_SIZE 14
 #define DDP_UNTAGGED_HDR_SIZE 18
-#define MULPDU 1500 //const mulpdu for now
+//#define MULPDU 1500 //const mulpdu for now
 #define TAGGED_BUFFERS_NUM 5 //TODO: change for ULP to define number of buffer
 #define UNTAGGED_BUFFERS_NUM 5 //TODO: change for ULP to define number of buffer
 #define TAGGED_BUFFER_SIZE 1000000 //TODO: change for ULP to define number of buffer
@@ -138,13 +138,13 @@ struct stag_t {
     struct pd* pd_id;
 };
 
-map<uint32_t,uint32_t> tag_to_pd;
+//map<uint32_t,uint32_t> tag_to_pd;
 
-queue<char*> tagged_buffer[TAGGED_BUFFERS_NUM];
-queue<char*> untagged_buffer[UNTAGGED_BUFFERS_NUM];
+//queue<char*> tagged_buffer[TAGGED_BUFFERS_NUM];
+//queue<char*> untagged_buffer[UNTAGGED_BUFFERS_NUM];
 
-map<uint8_t, pair<u_int32_t, pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
-map<uint64_t, pair<u_int32_t, pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
+//map<uint8_t, pair<u_int32_t, pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
+//map<uint64_t, pair<u_int32_t, pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
 
 struct ddp_stream_context* ddp_init_stream(int sockfd, struct pd* pd_id);
 
@@ -163,8 +163,8 @@ int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* packet);
 int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint32_t offset, void* data, uint32_t len, uint8_t rsrvdULP);
 
 //! Register Queues
-void register_tagged_queue(queue<ddp_packet*> *tagged_buffer);
-void register_untagged_queue(queue<ddp_packet*> *untagged_buffer);
+//void register_tagged_queue();
+//void register_untagged_queue();
 //! Untagged send/recv
 int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* data, 
                     uint32_t len, uint64_t reserved, uint32_t qn, uint32_t msn);

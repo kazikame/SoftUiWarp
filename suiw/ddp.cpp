@@ -1,4 +1,4 @@
-#include<iostream>
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -16,6 +16,11 @@
 
 #include "lwlog.h"
 
+queue<char*> tagged_buffer[TAGGED_BUFFERS_NUM];
+queue<char*> untagged_buffer[UNTAGGED_BUFFERS_NUM];
+
+map<uint8_t, pair<u_int32_t, pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
+map<uint64_t, pair<u_int32_t, pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer;
 ddp_stream_context* ddp_init_stream(int sockfd, struct pd* pd_id){
     ddp_stream_context* ddp_strem_ctx = new ddp_stream_context;
     ddp_strem_ctx->sockfd = sockfd;
