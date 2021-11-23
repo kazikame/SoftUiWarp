@@ -38,12 +38,16 @@ static ibv_device *create_suiw_device() {
     return fake_device;
 }
 
+/*
+ * Creates a client socket connected to the daemon.
+ *  returns: a fd for the socket, or -1 on failure.
+ */
 static int connect_to_daemon() {
     int ret = 0;
     struct sockaddr_in servaddr;
     // Create the socket.
-    dfd = socket(AF_INET, SOCK_STREAM, 0)   ;
-    if (dfd == -1) {
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock == -1) {
         perror("socket");
         return -1;
     }
@@ -56,15 +60,15 @@ static int connect_to_daemon() {
     ret = getaddrinfo(daemon_hostname, daemon_port, &hints, &res);
     if (ret != 0) {
         perror("getaddrinfo");
-        return ret;
+        return -1;
     }
     // Connect to the server.
-    ret = connect(dfd, res->ai_addr, res->ai_addrlen);
-    if (ret != 0) {
+    ret = connect(sock, res->ai_addr, res->ai_addrlen);
+    if (ret == -1) {
         perror("connect");
-        return ret;
+        return -1;
     }
-    return ret;
+    return sock;
 }
 
 /* Implementation of public API. */
@@ -105,63 +109,81 @@ int suiw_query_device(struct ibv_context *context, struct ibv_device_attr *devic
 }
 
 rdma_event_channel *suiw_create_event_channel() {
-    // TODO need daemon to do this
-    return nullptr;
+    daemon_msg msg;
+    msg.type = DAEMON_CREATE_EC;
+    send(dfd, &msg, sizeof(msg), 0);
+    printf("connecting to daemon\n");
+    int ec_fd = connect_to_daemon();
+    rdma_event_channel *result = (rdma_event_channel*) malloc(sizeof(rdma_event_channel));
+    result->fd = ec_fd;
+    return result;
 }
 
 void suiw_destroy_event_channel(rdma_event_channel *channel) {
-    // TODO
+    shutdown(channel->fd, SHUT_RDWR);
+    close(channel->fd);
+    free(channel);
 }
 
 int suiw_create_id(struct rdma_event_channel *channel,
 		   struct rdma_cm_id **id, void *context,
 		   enum rdma_port_space ps) {
-    // TODO need daemon to do this
-    return -1;
+    rdma_cm_id *result = (rdma_cm_id*) malloc(sizeof(rdma_cm_id));
+    result->channel = channel;
+    result->context = suiw_open_device(suiw_ibv_device);
+    // TODO some other initialization may be necessary here
+    *id = result;
+    return 0;
 }
 
 int suiw_destroy_id(struct rdma_cm_id *id) {
-    // TODO
-    return -1;
+    free(id);
+    return 0;
 }
 
 int suiw_resolve_addr(struct rdma_cm_id *id, struct sockaddr *src_addr,
 		    struct sockaddr *dst_addr, int timeout_ms) {
-    // TODO need daemon to do this
-    return -1;
+    rdma_cm_event event;
+    bzero(&event, sizeof(rdma_cm_event));
+    event.event = RDMA_CM_EVENT_ADDR_RESOLVED;
+    event.id = id;
+    int ret = send(id->channel->fd, &event, sizeof(rdma_cm_event), 0);
+    return ret == sizeof(rdma_cm_event) ? 0 : -1;
+}
+
+int suiw_resolve_route(struct rdma_cm_id *id, int timeout_ms) {
+    rdma_cm_event event;
+    bzero(&event, sizeof(rdma_cm_event));
+    event.event = RDMA_CM_EVENT_ROUTE_RESOLVED;
+    event.id = id;
+    int ret = send(id->channel->fd, &event, sizeof(rdma_cm_event), 0);
+    return ret == sizeof(rdma_cm_event) ? 0 : -1;
 }
 
 int suiw_get_cm_event(struct rdma_event_channel *channel,
             struct rdma_cm_event **event) {
-    // TODO
-    /*
     rdma_cm_event *recv_event = (rdma_cm_event*) malloc(sizeof(rdma_cm_event));
     *event = recv_event;
-    int ret = read(channel->fd, recv_event, sizeof(rdma_cm_event));
+    int ret = recv(channel->fd, recv_event, sizeof(rdma_cm_event), 0);
     return ret == sizeof(rdma_cm_event) ? 0 : -1;
-    */
-    return -1;
 }
 
 int suiw_ack_cm_event(struct rdma_cm_event *event) {
-    // TODO
-    return -1;
-}
-
-int suiw_resolve_route(struct rdma_cm_id *id, int timeout_ms) {
-    // TODO need daemon to do this
-    return -1;
+    free(event);
+    return 0;
 }
 
 /* Runs when the library is loaded. */
 __attribute__((constructor)) static void init(void) {
     printf("Loading libsuiw ...\n");
     suiw_ibv_device = create_suiw_device();
-    connect_to_daemon();
+    dfd = connect_to_daemon();
 }
 
 /* Runs when the library is unloaded. */
 __attribute__((destructor)) static void fini(void) {
     printf("Unloading libsuiw ...\n");
     free(suiw_ibv_device);
+    shutdown(dfd, SHUT_RDWR);
+    close(dfd);
 }
