@@ -115,21 +115,26 @@ int main(int argc, char **argv)
         close(sockfd);
     }
     sleep(10);
+    std::cout<<"dfdg\n";
     //! Send some stuff
-    // int garbage = 5;
-    // ret = mpa_send(sockfd, &garbage, sizeof(int), 0);
-    struct pd* pd1;
+    int garbage = 5;
+    ret = mpa_send(sockfd, &garbage, sizeof(int), 0);
+    struct pd* pd1 = new pd;
     pd1->pd_id = 12; 
+    std::cout<<"print\n";
     struct ddp_stream_context* ctx = ddp_init_stream(sockfd, pd1);
-    struct stag_t* stag;
+    std::cout<<"print 2\n";
+    struct stag_t* stag = new stag_t;
     stag->pd_id = pd1;
     stag->id = 1;
     register_stag(stag);
+    std::cout<<"tag dd\n";
     register_tagged_buffer();
     char data[10] = "Tswhat";
     for(int i = 0;i<10;i++){
         data[i] = 't';
     }
+    printf("cannot createjnnlk socket");
     ddp_tagged_send(ctx, stag, 0, data, 10, 1);
     printf("done\n");
     sleep(10);
