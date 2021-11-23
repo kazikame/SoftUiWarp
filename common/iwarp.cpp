@@ -39,6 +39,7 @@
 #include "iwarp.h"
 #include <stdio.h>
 #include <string.h>
+#include <iostream>
 
 #define MAX_BUF_LEN 1024
 
@@ -63,4 +64,19 @@ void print_mpa_rr(const struct mpa_rr* hdr, char* buf)
                             __be16_to_cpu(params->pd_len));
         return;
     }
+}
+
+void print_ddp(const ddp_packet *pkt, char* buf)
+{
+    const struct mpa_rr_params* params = &hdr->params;
+        snprintf(buf, 1024, "iWARP DDP Header\n"
+                            "\tdata: %s\n"
+                            "\reservedULP Flag: %d\n"
+                            "\tstag: %d\n"
+                            "\tto: %d\n",
+                            std::string str(pkt->data),
+                            pkt->hdr->tagged->reservedULP,
+                            pkt->hdr->tagged->stag,
+                            pkt->hdr->tagged->to);
+        return;
 }

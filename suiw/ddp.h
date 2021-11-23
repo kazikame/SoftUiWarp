@@ -83,6 +83,7 @@ Basically:
 #include<iostream>
 #include <map>
 #include <queue>
+#include "common/iwarp.h"
 #define DDP_TAGGED_HDR_SIZE 14
 #define DDP_UNTAGGED_HDR_SIZE 18
 //#define MULPDU 1500 //const mulpdu for now

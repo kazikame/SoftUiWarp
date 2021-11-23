@@ -88,6 +88,8 @@ int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint32_t
         offset = offset + data_size;
         pkts[i] = *pkt;
     }
+    print_ddp(pkts[0], log_buf);
+    lwlog_info("Sending DDP Message:\n%s", log_buf);
     mpa_send(ctx->sockfd, pkts, num_packets, NULL);
     //mpa_send pass to this here or fake client ??
     //what to return in this fn ? 
