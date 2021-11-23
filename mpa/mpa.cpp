@@ -47,7 +47,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-
+#include "suiw/ddp.h"
 #include "mpa.h"
 
 #include "lwlog.h"
@@ -213,11 +213,11 @@ int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_re
     }
     info->pdata = (char*)pdata_recv;
     
-    ret = mpa_recv_rr(sockfd, info);
+    mpa_recv_rr(sockfd, info);
 
     mpa_protocol_version = __mpa_rr_revision(info->hdr.params.bits);
     free(info);
-    return ret;
+    return 0;
 }
 
 int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags)

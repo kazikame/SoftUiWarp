@@ -92,10 +92,10 @@ int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint32_t
     }
 //print_ddp(&pkts[0], log_buf);
     lwlog_info("Sending DDP Message:\n%s", log_buf1);
-    mpa_send(ctx->sockfd, pkts, num_packets, NULL);
+    mpa_send_rr(ctx->sockfd, pkts, num_packets, 1);
     //mpa_send pass to this here or fake client ??
     //what to return in this fn ? 
-    return ddp_tagged_recv(ctx, pkts);
+    //return ddp_tagged_recv(ctx, pkts);
 }
 
 int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* data, uint32_t len, 
@@ -148,7 +148,7 @@ int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* pkt){
     }
     uint32_t offset = pkt->hdr->tagged->to;
     for(uint32_t i = 0;i<data_size;i++){
-        if(offset+i>=TAGGED_BUFFERS_NUM)
+        if(offset+i>=TAGGED_BUFFER_SIZE)
         {
             lwlog_err("buffer comsumed already");
             return 0;
