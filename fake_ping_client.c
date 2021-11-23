@@ -113,9 +113,17 @@ int main(int argc, char **argv)
         lwlog_err("closing connection");
         close(sockfd);
     }
-    sleep(10);
     //! Send some stuff
-    int garbage = 5;
-    ret = mpa_send(sockfd, &garbage, sizeof(int), 0);
+    char ulpdu[] = {0x41, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x56, 0x10, 0x7e, 0x08, 0x76, 0x20, 0x2e, 0xe8, 0xcf, 0x00, 0x00,
+                    0x00, 0x00, 0x40};
+    ret = mpa_send(sockfd, &ulpdu, sizeof(ulpdu), 0);
+
+    char packet[1000] = "";
+    struct siw_mpa_packet info;
+    info.ulpdu = packet;
+    ret = mpa_recv(sockfd, &info);
+
+    lwlog_info("%s", info.ulpdu);
     sleep(10);
 }

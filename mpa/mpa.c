@@ -258,7 +258,7 @@ int mpa_recv(int sockfd, struct siw_mpa_packet* info)
     //! Get header
     int rcvd = recv(sockfd, &info->ulpdu_len, MPA_HDR_SIZE, 0);
 
-    if (rcvd < sizeof(__u16))
+    if (rcvd < MPA_HDR_SIZE)
     {
         lwlog_err("mpa_recv: didn't receive enough bytes");
         return -1;
@@ -275,7 +275,7 @@ int mpa_recv(int sockfd, struct siw_mpa_packet* info)
     }
 
     //! Get payload
-    int padding_len = (sizeof(packet_len) + packet_len) % 4;
+    int padding_len = (MPA_HDR_SIZE + packet_len) % 4;
     int payload_len = packet_len + padding_len;
     rcvd = recv(sockfd, info->ulpdu, payload_len, 0);
 
