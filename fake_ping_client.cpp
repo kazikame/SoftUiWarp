@@ -118,15 +118,15 @@ int main(int argc, char **argv)
     //! Send some stuff
     // int garbage = 5;
     // ret = mpa_send(sockfd, &garbage, sizeof(int), 0);
-    struct pd* pd_id;
-    pd_id->pd_id = 12; 
-    struct ddp_stream_context* ctx = ddp_init_stream(sockfd, pd_id);
+    struct pd* pd1;
+    pd1->pd_id = 12; 
+    struct ddp_stream_context* ctx = ddp_init_stream(sockfd, pd1);
     struct stag_t* stag;
-    stag->pd_id = ctx->pd_id->pd_id;
+    stag->pd_id = pd1;
     stag->id = 1;
     register_stag(stag);
     register_tagged_buffer();
-    char data[10] = "Thisiswhat";
+    char data[10] = "Tswhat";
     for(int i = 0;i<10;i++){
         data[i] = 't';
     }

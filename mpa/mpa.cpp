@@ -61,7 +61,7 @@ int mpa_send_rr(int sockfd, const void* pdata, __u8 pd_len, int req)
     struct mpa_rr hdr;
     memset(&hdr, 0, sizeof hdr);
 
-    strncpy(hdr.key, req ? MPA_KEY_REQ : MPA_KEY_REP, MPA_RR_KEY_LEN);
+    strncpy((char*)hdr.key, req ? MPA_KEY_REQ : MPA_KEY_REP, MPA_RR_KEY_LEN);
     int version = MPA_REVISION_1;
     __mpa_rr_set_revision(&hdr.params.bits, version);
 
@@ -118,7 +118,7 @@ int mpa_recv_rr(int sockfd, struct siw_mpa_info* info)
 
     __u16 pd_len = __be16_to_cpu(hdr->params.pd_len);
 
-    int is_req = strncmp(MPA_KEY_REQ, hdr->key, MPA_RR_KEY_LEN) == 0;
+    int is_req = strncmp(MPA_KEY_REQ, (char*)hdr->key, MPA_RR_KEY_LEN) == 0;
     //! private data length is 0, and is request
     if (!pd_len)
     {
@@ -157,7 +157,7 @@ int mpa_recv_rr(int sockfd, struct siw_mpa_info* info)
     //! TODO: this is basically a memory leak. remove
     if (!info->pdata)
     {
-        info->pdata = malloc(pd_len + 4);
+        info->pdata = (char*)malloc(pd_len + 4);
         if (!info->pdata)
         {
             lwlog_err("mpa_recv_rr: out of memory");
@@ -189,13 +189,13 @@ int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_re
     int ret = mpa_send_rr(sockfd, pdata_send, pd_len, 1);
     if (ret < 0) return ret;
 
-    struct siw_mpa_info* info = malloc(sizeof(struct siw_mpa_info));
+    struct siw_mpa_info* info = (siw_mpa_info*)malloc(sizeof(struct siw_mpa_info));
     if (!info)
     {
         lwlog_err("out of memory");
         return -1;
     }
-    info->pdata = pdata_recv;
+    info->pdata = (char*)pdata_recv;
     
     ret = mpa_recv_rr(sockfd, info);
 

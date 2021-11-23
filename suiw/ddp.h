@@ -1,5 +1,5 @@
-#ifndef _DDP_H
-#define _DDP_H
+#ifndef DDP_H_
+#define DDP_H_
 /*
  * Software Userspace iWARP device driver for Linux
  *
@@ -80,9 +80,9 @@ Basically:
 #include <asm/byteorder.h>
 #include <stdint.h>
 #include <stdio.h>
-//#include <map>
-//#include <queue>
-//#include <pair>
+#include<iostream>
+#include <map>
+#include <queue>
 #define DDP_TAGGED_HDR_SIZE 14
 #define DDP_UNTAGGED_HDR_SIZE 18
 //#define MULPDU 1500 //const mulpdu for now
@@ -90,7 +90,7 @@ Basically:
 #define UNTAGGED_BUFFERS_NUM 5 //TODO: change for ULP to define number of buffer
 #define TAGGED_BUFFER_SIZE 1000000 //TODO: change for ULP to define number of buffer
 #define UNTAGGED_BUFFER_SIZE 1000000 //TODO: change for ULP to define number of buffer
-#define MOD32 = 4294967296
+#define MOD32 4294967296
 struct ddp_tagged_hdr {
     uint8_t reserved;
     uint8_t reservedULP; //is this requireed here or only in ULP?
@@ -138,13 +138,13 @@ struct stag_t {
     struct pd* pd_id;
 };
 
-//map<uint32_t,uint32_t> tag_to_pd;
+//std::map<uint32_t,uint32_t> tag_to_pd;
 
-//queue<char*> tagged_buffer[TAGGED_BUFFERS_NUM];
-//queue<char*> untagged_buffer[UNTAGGED_BUFFERS_NUM];
+//char *tagged_buffer[TAGGED_BUFFERS_NUM];
+//char *untagged_buffer[UNTAGGED_BUFFERS_NUM];
 
-//map<uint8_t, pair<u_int32_t, pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
-//map<uint64_t, pair<u_int32_t, pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
+//std::map<uint8_t, std::pair<u_int32_t, std::pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
+//std::map<uint64_t, std::pair<u_int32_t, std::pair<u_int32_t, u_int32_t> > > ULP_to_untagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
 
 struct ddp_stream_context* ddp_init_stream(int sockfd, struct pd* pd_id);
 

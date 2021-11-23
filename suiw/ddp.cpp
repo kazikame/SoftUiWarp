@@ -11,16 +11,18 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include<map>
+#include<queue>
 #include "ddp.h"
 #include "mpa/mpa.h"
 
 #include "lwlog.h"
 
-queue<char*> tagged_buffer[TAGGED_BUFFERS_NUM];
-queue<char*> untagged_buffer[UNTAGGED_BUFFERS_NUM];
-
-map<uint8_t, pair<u_int32_t, pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
-map<uint64_t, pair<u_int32_t, pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer;
+char* tagged_buffer[TAGGED_BUFFERS_NUM];
+char* untagged_buffer[UNTAGGED_BUFFERS_NUM];
+//using namespace std;
+std::map<uint32_t,uint32_t> tag_to_pd;
+std::map<uint8_t, std::pair<u_int32_t, std::pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
+std::map<uint64_t, std::pair<u_int32_t, std::pair<u_int32_t, u_int32_t> > > ULP_to_untagged_buffer;
 ddp_stream_context* ddp_init_stream(int sockfd, struct pd* pd_id){
     ddp_stream_context* ddp_strem_ctx = new ddp_stream_context;
     ddp_strem_ctx->sockfd = sockfd;
@@ -36,18 +38,20 @@ void ddp_kill_stream(struct ddp_stream_context* ddp_strem_ctx){
 }
 
 int register_stag(struct stag_t* tag){
-    tag_to_pd[tag->id] = pd_id->pd_id;
+    tag_to_pd[tag->id] = (tag->pd_id)->pd_id;
     return tag->id;
 }
 
 void register_tagged_buffer(){
     for(int i = 0;i<TAGGED_BUFFERS_NUM;i++){
-        tagged_buffer[i] = new char[TAGGED_BUFFER_SIZE]; 
+	    //char* buff = new char[TAGGED_BUFFER_SIZE];
+	tagged_buffer[i] = new char[TAGGED_BUFFER_SIZE]; 
     }
     return;
 }
 void register_untagged_buffer(){
     for(int i = 0;i<UNTAGGED_BUFFERS_NUM;i++){
+	//char* buff = new char[UNTAGGED_BUFFER_SIZE];
         untagged_buffer[i] = new char[UNTAGGED_BUFFER_SIZE]; 
     }
     return;
@@ -71,7 +75,7 @@ int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint32_t
         pkt->hdr = new ddp_hdr;
         pkt->hdr->tagged = hdr;
         pkt->hdr->tagged->to = offset;
-        if(i+data_size>len){
+        if(i+data_size>=len){
             pkt->data = new char[len-i+1];
             pkt->hdr->tagged->reserved = pkt->hdr->tagged->reserved | 64; //bit set for last packet;
         }
@@ -82,7 +86,7 @@ int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint32_t
             pkt->data[k] = datac[j];
         }
         offset = offset + data_size;
-        pkts[i] = pkt;
+        pkts[i] = *pkt;
     }
     mpa_send(ctx->sockfd, pkts, num_packets, NULL);
     //mpa_send pass to this here or fake client ??
@@ -104,14 +108,15 @@ int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* 
     if(len%data_size != 0)
         num_packets++;
     uint32_t offset = 0;
+    ddp_packet *pkts = new ddp_packet[num_packets];
     for(uint32_t i = 0;i<len;i = i + data_size){
         ddp_packet* pkt = new ddp_packet;
         pkt->hdr = new ddp_hdr;
-        pkt->hdr->tagged = hdr;
-        pkt->hdr->tagged->mo = offset;
-        if(i+data_size>len){
+        pkt->hdr->untagged = hdr;
+        pkt->hdr->untagged->mo = offset;
+        if(i+data_size>=len){
             pkt->data = new char[len-i+1];
-            pkt->hdr->tagged->reserved = pkt->hdr->tagged->reserved | 64; //bit set for last packet;
+            pkt->hdr->untagged->reserved = pkt->hdr->untagged->reserved | 64; //bit set for last packet;
         }
         else{
             pkt->data = new char[data_size];
@@ -120,7 +125,7 @@ int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* 
             pkt->data[k] = datac[j];
         }
         offset = offset + data_size;
-        pkts[i] = pkt;
+        pkts[i] = *pkt;
     }
 }
 
@@ -151,7 +156,7 @@ int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* pkt){
     }
     uint8_t ulp_key= pkt->hdr->tagged->reservedULP;
     if(ULP_to_tagged_buffer.find(ulp_key)==ULP_to_tagged_buffer.end()){
-        ULP_to_tagged_buffer[ulp_key] = make_pair(stag, make_pair(offset,0));
+        ULP_to_tagged_buffer[ulp_key] = std::make_pair(stag, std::make_pair(offset,0));
     }
     if(last==64){
         ULP_to_tagged_buffer[ulp_key].second.second = offset+data_size-1;
@@ -161,8 +166,8 @@ int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* pkt){
 //TODO: finish untagged recv ddp 
 int ddp_untagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* packet){
     uint32_t data_size = MULPDU-DDP_UNTAGGED_HDR_SIZE;
-    uint64_t ulp_key = pkt->hdr->untagged->reservedULP << 32 | pkt->hdr->untagged->reserved2;
-    uint32_t last = pkt->hdr->untagged->reserved & 64 ;
+    //uint64_t ulp_key = pkt->hdr->untagged->reservedULP << 32 | pkt->hdr->untagged->reserved2;
+    //uint32_t last = pkt->hdr->untagged->reserved & 64 ;
     return 0;
 }
     
