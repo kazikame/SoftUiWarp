@@ -130,7 +130,8 @@ int suiw_create_id(struct rdma_event_channel *channel,
 		   enum rdma_port_space ps) {
     rdma_cm_id *result = (rdma_cm_id*) malloc(sizeof(rdma_cm_id));
     result->channel = channel;
-    result->context = suiw_open_device(suiw_ibv_device);
+    result->verbs = suiw_open_device(suiw_ibv_device);
+    result->context = context;
     // TODO some other initialization may be necessary here
     *id = result;
     return 0;
