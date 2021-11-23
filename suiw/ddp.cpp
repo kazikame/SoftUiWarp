@@ -14,9 +14,10 @@
 #include<queue>
 #include "ddp.h"
 #include "mpa/mpa.h"
+#include "common/iwarp.h"
 
 #include "lwlog.h"
-
+char log_buf1[1024];
 char* tagged_buffer[TAGGED_BUFFERS_NUM];
 char* untagged_buffer[UNTAGGED_BUFFERS_NUM];
 //using namespace std;
@@ -86,10 +87,11 @@ int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint32_t
             pkt->data[k] = datac[j];
         }
         offset = offset + data_size;
+	print_ddp(pkts, log_buf1);
         pkts[i] = *pkt;
     }
-    print_ddp(pkts[0], log_buf);
-    lwlog_info("Sending DDP Message:\n%s", log_buf);
+//print_ddp(&pkts[0], log_buf);
+    lwlog_info("Sending DDP Message:\n%s", log_buf1);
     mpa_send(ctx->sockfd, pkts, num_packets, NULL);
     //mpa_send pass to this here or fake client ??
     //what to return in this fn ? 

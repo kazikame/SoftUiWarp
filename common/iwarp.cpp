@@ -66,17 +66,17 @@ void print_mpa_rr(const struct mpa_rr* hdr, char* buf)
     }
 }
 
-void print_ddp(const ddp_packet *pkt, char* buf)
+void print_ddp(ddp_packet *pkt, char* buf)
 {
-    const struct mpa_rr_params* params = &hdr->params;
-        snprintf(buf, 1024, "iWARP DDP Header\n"
-                            "\tdata: %s\n"
-                            "\reservedULP Flag: %d\n"
-                            "\tstag: %d\n"
-                            "\tto: %d\n",
-                            std::string str(pkt->data),
-                            pkt->hdr->tagged->reservedULP,
-                            pkt->hdr->tagged->stag,
-                            pkt->hdr->tagged->to);
+    //const struct mpa_rr_params* params = &hdr->params;
+        snprintf(buf, 1024, "iWARP DDP Header\n");
+			    //"\tdata: %s\n"
+                            //"\reservedULP Flag: %d\n"
+                            //"\tstag: %d\n"
+                            //"\tto: %d\n",
+                            //std::string str(pkt->data),
+                            //pkt->hdr->tagged->reservedULP,
+                            //pkt->hdr->tagged->stag,
+                            //pkt->hdr->tagged->to);
         return;
 }

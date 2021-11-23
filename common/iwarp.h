@@ -79,7 +79,7 @@ struct mpa_rr {
 	struct mpa_rr_params params;
 };
 void print_mpa_rr(const struct mpa_rr*, char*);
-
+void print_ddp(struct ddp_packet*, char*);
 static inline void __mpa_rr_set_revision(__u16 *bits, __u8 rev)
 {
 	*bits = (*bits & ~MPA_RR_MASK_REVISION)
