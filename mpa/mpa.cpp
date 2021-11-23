@@ -186,9 +186,25 @@ int mpa_recv_rr(int sockfd, struct siw_mpa_info* info)
 //! TODO: Add config options to choose CRC, Markers, etc.
 int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_recv)
 {
-    int ret = mpa_send_rr(sockfd, pdata_send, pd_len, 1);
-    if (ret < 0) return ret;
-
+    // int ret = mpa_send_rr(sockfd, pdata_send, pd_len, 1);
+    // if (ret < 0) return ret;
+    struct pd* pd1 = new pd;
+    pd1->pd_id = 12; 
+    std::cout<<"print\n";
+    struct ddp_stream_context* ctx = ddp_init_stream(sockfd, pd1);
+    std::cout<<"print 2\n";
+    struct stag_t* stag = new stag_t;
+    stag->pd_id = pd1;
+    stag->id = 1;
+    register_stag(stag);
+    std::cout<<"tag dd\n";
+    register_tagged_buffer();
+    char data[10] = "Tswhat";
+    for(int i = 0;i<10;i++){
+        data[i] = 't';
+    }
+    printf("before send");
+    ddp_tagged_send(ctx, stag, 0, data, 10, 1);
     struct siw_mpa_info* info = (siw_mpa_info*)malloc(sizeof(struct siw_mpa_info));
     if (!info)
     {

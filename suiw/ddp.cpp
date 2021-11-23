@@ -95,6 +95,7 @@ int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint32_t
     mpa_send(ctx->sockfd, pkts, num_packets, NULL);
     //mpa_send pass to this here or fake client ??
     //what to return in this fn ? 
+    return ddp_tagged_recv(ctx, pkts);
 }
 
 int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* data, uint32_t len, 

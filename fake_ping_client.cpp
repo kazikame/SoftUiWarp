@@ -134,7 +134,7 @@ int main(int argc, char **argv)
     for(int i = 0;i<10;i++){
         data[i] = 't';
     }
-    printf("cannot createjnnlk socket");
+    printf("before send");
     ddp_tagged_send(ctx, stag, 0, data, 10, 1);
     printf("done\n");
     sleep(10);
