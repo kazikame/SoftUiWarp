@@ -1,6 +1,3 @@
-
-
-
 1. ddp_send(...): Send upto 2^32-1 bytes. this functions segments data into multiple MPA packets and calls mpa_send on each one of them.
 
 2. ddp_recv(struct ddp_message* message): Receive an entire untagged or tagged message. Copy the packet directly into the respective buffer. Return with:
