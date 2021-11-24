@@ -58,7 +58,7 @@ struct ddp_stream_context {
 };
 
 struct ddp_hdr {
-    __u16 hdr;
+    __u16 bits;
 };
 
 enum {
@@ -83,10 +83,10 @@ struct ddp_untagged_meta {
 };
 
 struct ddp_message {
-    struct ddp_hdr;
+    struct ddp_hdr* hdr;
     union {
-        struct ddp_tagged_meta tagged_metadata;
-        struct ddp_untagged_meta untagged_metadata;
+        struct ddp_tagged_meta* tagged_metadata;
+        struct ddp_untagged_meta* untagged_metadata;
     };
     void* data;
     int len;
@@ -110,7 +110,7 @@ int ddp_recv(struct ddp_stream_context*, struct ddp_message*);
 int register_untagged_buffer(struct ddp_stream_context*, int qn, int max_buffer_size, int length);
 int deregister_untagged_buffer(struct ddp_stream_context*, int qn);
 
-int register_tagged_buffer(struct ddp_stream_context*, struct stag_t*, struct tagged_buffer*);
+int register_tagged_buffer(struct ddp_stream_context*, struct tagged_buffer*);
 void deregister_tagged_buffer(struct ddp_stream_context*, struct stag_t*);
 
 

@@ -87,6 +87,7 @@ struct tagged_buffer {
     stag_t stag;
     void* data;
     int len;
+    int access_ctrl = 0;
 };
 
 #endif
