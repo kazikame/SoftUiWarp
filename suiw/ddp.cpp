@@ -60,58 +60,36 @@ void register_untagged_buffer(){
     return;
 }
 
-int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint32_t offset, void* data, uint32_t len, uint8_t rsrvdULP){
-    //create ddp header for each fragment
-    ddp_tagged_hdr* hdr = new ddp_tagged_hdr;
-    hdr->reserved = 129; //first and last bit set
-    hdr->reservedULP = rsrvdULP;
-    hdr->stag = tag->id;
-    //fragmentation
+int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint64_t offset, void* data, uint32_t len, uint8_t rsrvdULP){
     char *datac = static_cast<char*>(data);
     uint32_t data_size = MULPDU-DDP_TAGGED_HDR_SIZE;
     uint32_t num_packets = (len/data_size);
     if(len%data_size != 0)
         num_packets++;
     std::cout<<"num packets are "<<num_packets<<"\n";
-    ddp_packet *pkts = new ddp_packet[num_packets];
+    uint8_t resv = 129;
     for(uint32_t i = 0;i<len;i = i + data_size){
-        std::cout<<"for loop send "<<len<<"\n";
-        ddp_packet* pkt = new ddp_packet;
-        pkt->hdr = new ddp_hdr;
-        pkt->hdr->tagged = hdr;
-        pkt->hdr->tagged->to = offset;
         if(i+data_size>=len){
-            pkt->data = new char[data_size];//len-i+1
-            std::cout<<"if of last "<<data_size<<"\n";
-            pkt->hdr->tagged->reserved = pkt->hdr->tagged->reserved | 64; //bit set for last packet;
+            data_size = len-i;
+            std::cout<<"last packet "<<data_size<<"\n";
+            resv = resv | 64; //bit set for last packet;
         }
-        else{
-            pkt->data = new char[data_size];
+        char *buf = new char[DDP_TAGGED_HDR_SIZE+data_size];
+        buf[0] = resv;
+        buf[1] = rsrvdULP;
+        buf[2] = tag >> 24; buf[3] = tag >> 16; buf[4] = tag >> 8; buf[5] = tag; 
+        buf[6] = offset >> 56; buf[7] = offset >> 48; buf[8] = offset >> 40; buf[9] = offset >> 32;
+        buf[10] = offset >> 24; buf[11] = offset >> 16; buf[12] = offset >> 8; buf[13] = offset;
+        for(int i = 0;i<data_size;i++){
+            buf[DDP_TAGGED_HDR_SIZE+i] = datac[i];
         }
-        for(uint32_t j = i, k = 0;k<data_size && j<len;j++,k++){
-            pkt->data[k] = datac[j];
-        }
-    offset = offset + data_size;
-	print_ddp(pkts, log_buf1);
-        pkts[i] = *pkt;
+        offset = offset + data_size;
+        mpa_send(ctx->sockfd, buf, DDP_TAGGED_HDR_SIZE+data_size, 1);
     }
-//print_ddp(&pkts[0], log_buf);
-    lwlog_info("Sending DDP Message:\n%s", log_buf1);
-    mpa_send_rr(ctx->sockfd, pkts, num_packets, 1);
-    //mpa_send pass to this here or fake client ??
-    //what to return in this fn ? 
-    //return ddp_tagged_recv(ctx, pkts);
 }
 
-int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* data, uint32_t len, 
+int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* data, uint32_t len,
                     uint64_t reserved, uint32_t qn, uint32_t msn){
-    //ddp_untagged_hdr* hdr = new ddp_untagged_hdr;
-    //hdr->reserved = 129; //first and last bit set
-    //hdr->reserved2 = static_cast<uint32_t>(reserved & 0xFFFFFFFF);
-    //hdr->reservedULP = reserved >> 32;
-    //hdr->qn = qn;
-    //hdr->msn = msn%MOD32;
-    //fragmentation
     char *datac = static_cast<char*>(data);
     uint32_t data_size = MULPDU-DDP_UNTAGGED_HDR_SIZE;
     uint32_t num_packets = (len/data_size);
@@ -119,78 +97,28 @@ int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* 
         num_packets++;
     std::cout<<"num packets are "<<num_packets<<"\n";
     uint32_t offset = 0;
-    //vector<*ddp_packet> pkts;
-    ddp_packet *pkts = new ddp_packet[num_packets];
+    uint8_t resv = 1;
     for(uint32_t i = 0;i<len;i = i + data_size){
-        ddp_packet* pkt = (ddp_packet*)malloc(sizeof(ddp_packet)); //new ddp_packet;
-        pkt->hdr = (ddp_hdr*)malloc(sizeof(ddp_hdr));
-	pkt->hdr->untagged = (ddp_untagged_hdr*)malloc(sizeof(ddp_untagged_hdr));
-        pkt->hdr->untagged->reserved = 1;//hdr->reserved;
-	pkt->hdr->untagged->reserved2 = static_cast<uint32_t>(reserved & 0xFFFFFFFF);
-	pkt->hdr->untagged->reservedULP = reserved >> 32;
-        pkt->hdr->untagged->mo = offset;
-	pkt->hdr->untagged->qn = qn;
-	pkt->hdr->untagged->msn = msn%MOD32;
         if(i+data_size>=len){
-            pkt->data = new char[len-i+1];
-            std::cout<<"if of last "<<data_size<<"\n";
-	    //pkt->hdr->untagged->reserved = hdr->reserved;
-            pkt->hdr->untagged->reserved = pkt->hdr->untagged->reserved | 64; //bit set for last packet;
+            data_size = len-i;
+            std::cout<<"last packet "<<data_size<<"\n";
+            resv = resv | 64; //bit set for last packet;
         }
-        else{
-            pkt->data = new char[data_size];
+        char *buf = new char[DDP_UNTAGGED_HDR_SIZE+data_size];
+        buf[0] = resv;
+        buf[1] = reserved >> 32;
+        uint32_t reserved2 = reserved << 32;
+        buf[2] = reserved2 >> 24;buf[3] = reserved2 >> 16 , buf[4]= reserved2 >> 8, buf[5] = reserved2;
+        buf[6] = qn >> 24; buf[7] = qn >> 16; buf[8] = qn >> 8; buf[9] = qn;
+        msn = msn%MOD32;
+        buf[10] = msn >>24; buf[11] = msn >> 16; buf[12] = msn >> 8; buf[13] = msn;
+        buf[14] = offset >> 24; buf[15] = offset >> 16; buf[16] = offset >> 8; buf[17] = offset;
+        for(int i = 0;i<data_size;i++){
+            buf[DDP_UNTAGGED_HDR_SIZE+i] = datac[i];
         }
-        for(uint32_t j = i, k = 0;k<data_size && j<len;j++,k++){
-            pkt->data[k] = datac[j];
-            std::cout<<pkt->data[k]<<" ";
-        }
-	std::cout<<"\n";
-        //offset = offset + data_size;
-	//char* stream;
-	char *buf = new char[18+len];
-	buf[0] = reinterpret_cast<unsigned char>(pkt->hdr->untagged->reserved);
-	buf[1] = reinterpret_cast<unsigned char>(pkt->hdr->untagged->reservedULP);
-	uint32_t reserved2 = reserved << 32;
-	buf[2] = reserved2 >> 24;buf[3] = reserved2 >> 16 , buf[4]= reserved2 >> 8, buf[5] = reserved2;
-	buf[6] = qn >> 24; buf[7] = qn >> 16; buf[8] = qn >> 8; buf[9] = qn;
-	buf[10] = msn >>24; buf[11] = msn >> 16; buf[12] = msn >> 8; buf[13] = msn;
-	buf[14] = offset >> 24; buf[15] = offset >> 16; buf[16] = offset >> 8; buf[17] = offset;
-	//sprintf(buf+2,"&#37;u", pkt->hdr->untagged->reserved2);
-	//sprintf(buf+6, "&#37;u", pkt->hdr->untagged->qn);
-	//sprintf(buf+10, "&#37;u", pkt->hdr->untagged->msn);
-	//sprintf(buf+14, "&#37;u", pkt->hdr->untagged->mo);
-	for(int i = 0;i<len;i++){
-	buf[18+i] = datac[i];
-	}
-	offset = offset + data_size;
-	//ibuf[2] = reinterpret_cast<unsigned char>(pkt->hdr->untagged->reserved[2]);
-	//char* stream = reinterpret_cast<char*>(pkt->hdr->untagged->reservedULP);
-	std::cout<<"hello "<<sizeof(ddp_packet)<<"\n";
-	//stream = (char*)malloc(sizeof(ddp_packet));
-	//std::cout<<"stream "<<sizeof(stream)<<"\n";
-	//std::memcpy(stream, pkt,sizeof(ddp_packet));
-	//for (i = 0;i<sizeof(ddp_packet);i++)
-	//std::cout << "'" << stream[i] << "', ";
-	//STATIC_ASSERT( sizeof *ddp_packet == sizeof *buffer * (2 * MAX + 1) );
-	//std::cout<<"hella\n";
-        pkts[i] = *pkt;
-	std::cout<<"going in mpa send\n";
-	mpa_send(ctx->sockfd, buf, 18+len, 1);
-	std::cout<<"coming from mpa send\n";
-	//pkts[i] = *pkt;
-	//pkts.push_back(pkts);
+        offset = offset + data_size;
+        mpa_send(ctx->sockfd, buf, DDP_UNTAGGED_HDR_SIZE+data_size, 1);
     }
-    for(int i = 0;i<num_packets;i++){
-        ddp_packet pkt = pkts[i];
-        std::cout<<"pkt resreved byte: "<<pkt.hdr->untagged->reserved<<"\n";
-        std::cout<<"pkt reserved2: "<<pkt.hdr->untagged->reserved2<<"\n";
-        std::cout<<"pkt reservedULP: "<<pkt.hdr->untagged->reservedULP<<"\n";
-        std::cout<<"pkt queue number: "<<pkt.hdr->untagged->qn<<"\n";
-        std::cout<<"pkt msn: "<<pkt.hdr->untagged->msn<<"\n";
-        std::cout<<"pkt mo/offset: "<<pkt.hdr->untagged->mo<<"\n";
-    }
-    //char* stream = std::memcpy(data, &pkts, sizeof(ddp_packet));//reinterpret_cast<char*>(*pkts);
-    //mpa_send(ctx->sockfd, stream, 1, 1);
 }
 
 int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* pkt){
