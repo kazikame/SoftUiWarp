@@ -77,7 +77,8 @@ int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint64_t
         char *buf = new char[DDP_TAGGED_HDR_SIZE+data_size];
         buf[0] = resv;
         buf[1] = rsrvdULP;
-        buf[2] = tag >> 24; buf[3] = tag >> 16; buf[4] = tag >> 8; buf[5] = tag; 
+	uint32_t tag_in = tag->pd_id->pd_id;
+        buf[2] = tag_in >> 24; buf[3] = tag_in >> 16; buf[4] = tag_in >> 8; buf[5] = tag_in; 
         buf[6] = offset >> 56; buf[7] = offset >> 48; buf[8] = offset >> 40; buf[9] = offset >> 32;
         buf[10] = offset >> 24; buf[11] = offset >> 16; buf[12] = offset >> 8; buf[13] = offset;
         for(int i = 0;i<data_size;i++){
