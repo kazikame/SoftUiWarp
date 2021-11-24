@@ -128,4 +128,97 @@ int poll_cq(struct cq *cq, int num_entries, struct work_completion *wc) {
     return cq->q->try_dequeue_bulk(wc, num_entries);
 }
 
+
+
+
+/** Work Queues **/
+
+enum wq_state {
+	WQS_RESET,
+	WQS_RDY,
+	WQS_ERR,
+	WQS_UNKNOWN
+};
+
+enum wq_type {
+	WQT_RQ,
+    WQT_SQ
+};
+
+//! TODO: Currently we only support a SINGLE sge per recv/send wr
+//!       Fix this.
+struct sge {
+	uint64_t		addr;
+	uint32_t		length;
+	
+    //! NO need of any lkey, MR are NOT registered since everything is in userspace anyway.
+    // uint32_t		lkey;
+};
+
+//! Receive Work request is only for send response packets
+struct recv_wr {
+	uint64_t		wr_id;
+	struct recv_wr     *next;
+	struct sge	       *sg_list;
+	int			num_sge;
+};
+
+enum wr_opcode {
+	WR_RDMA_WRITE,
+	WR_RDMA_WRITE_WITH_IMM,
+	WR_SEND,
+	WR_SEND_WITH_IMM,
+	WR_RDMA_READ,
+	WR_ATOMIC_CMP_AND_SWP,
+	WR_ATOMIC_FETCH_AND_ADD,
+	WR_LOCAL_INV,
+	WR_BIND_MW,
+	WR_SEND_WITH_INV,
+	WR_TSO,
+};
+
+struct send_wr {
+	uint64_t		wr_id;
+	struct send_wr     *next;
+	struct sge	       *sg_list;
+	int			num_sge;
+	enum wr_opcode	opcode;
+	unsigned int		send_flags;
+	/* When opcode is *_WITH_IMM: Immediate data in network byte order.
+	 * When opcode is *_INV: Stores the rkey to invalidate
+	 */
+	union {
+		__be32			imm_data;
+		uint32_t		invalidate_rkey;
+	};
+    
+    //! No support for UD or UC RDMA
+	union {
+		struct {
+            /*Start address of remote memory block to access 
+            (read or write, depends on the opcode). 
+            Relevant only for RDMA WRITE (with immediate) and RDMA READ opcodes*/   
+			uint64_t	remote_addr;
+			uint32_t	rkey;
+		} rdma;
+	} wr;
+};
+
+struct wq {
+	struct rdmap_stream_context     *context;
+	struct	pd	       *pd;
+	struct	cq	       *cq;
+	uint32_t		wq_num;
+	uint32_t		handle;
+	enum wq_state       state;
+	enum wq_type	wq_type;
+    union {
+        moodycamel::BlockingConcurrentQueue<recv_wr>* send_q;
+        moodycamel::BlockingConcurrentQueue<send_wr>* recv_q;
+    };
+	uint32_t		events_completed;
+	uint32_t		comp_mask;
+};
+
+
 #endif

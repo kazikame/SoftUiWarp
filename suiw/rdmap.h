@@ -99,7 +99,7 @@
  * 
  */
 
-//! Init DDP Stream, Queue setup, thread start
+//! Init DDP Stream, Queue setup, recv/send thread start
 struct rdmap_stream_context* rdmap_init_stream(int sockfd, struct pd_t* pd);
 
 //! Free ddp stream structures
