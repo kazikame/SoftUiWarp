@@ -109,7 +109,7 @@ struct ddp_untagged_hdr {
 };
 
 struct ddp_hdr {
-    uint8_t ctrl; //what's this?
+    //uint8_t ctrl; //what's this?
     union {
         struct ddp_tagged_hdr* tagged;
         struct ddp_untagged_hdr* untagged;

@@ -114,7 +114,7 @@ int main(int argc, char **argv)
         lwlog_err("closing connection");
         close(sockfd);
     }
-    sleep(10);
+    sleep(2);
     std::cout<<"dfdg\n";
     //! Send some stuff
     //int garbage = 5;
@@ -146,8 +146,8 @@ int main(int argc, char **argv)
       //  data[i] = 't';
     //}
     printf("before send");
-    struct ddp_stream_context* ctx, struct stag_t* tag, void* data, uint32_t len, 
-                    uint64_t reserved, uint32_t qn, uint32_t msn)
+    //struct ddp_stream_context* ctx, struct stag_t* tag, void* data, uint32_t len, 
+      //              uint64_t reserved, uint32_t qn, uint32_t msn)
     ret = ddp_untagged_send(ctx, stag, data, 16, 287762808832, 0, 1);
     printf("done\n");
     char packet[1000] = "";
