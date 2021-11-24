@@ -58,7 +58,7 @@ struct ddp_stream_context {
 };
 
 struct ddp_hdr {
-    __u16 hdr;
+    __u16 bits;
 };
 
 enum {
@@ -83,10 +83,10 @@ struct ddp_untagged_meta {
 };
 
 struct ddp_message {
-    struct ddp_hdr;
+    struct ddp_hdr* hdr;
     union {
-        struct ddp_tagged_meta tagged_metadata;
-        struct ddp_untagged_meta untagged_metadata;
+        struct ddp_tagged_meta* tagged_metadata;
+        struct ddp_untagged_meta* untagged_metadata;
     };
     void* data;
     int len;
