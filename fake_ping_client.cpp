@@ -114,7 +114,7 @@ int main(int argc, char **argv)
         lwlog_err("closing connection");
         close(sockfd);
     }
-    sleep(10);
+    sleep(2);
     std::cout<<"dfdg\n";
     //! Send some stuff
     //int garbage = 5;

@@ -4,7 +4,10 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
-
+#include <cstdint>
+#include <cassert>
+#include<cstring>
+#include <boost/archive/text_oarchive.hpp>
 #include <netdb.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -120,9 +123,9 @@ int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* 
     //vector<*ddp_packet> pkts;
     ddp_packet *pkts = new ddp_packet[num_packets];
     for(uint32_t i = 0;i<len;i = i + data_size){
-        ddp_packet* pkt = new ddp_packet;
-        pkt->hdr = new ddp_hdr;
-	pkt->hdr->untagged = new ddp_untagged_hdr;
+        ddp_packet* pkt = (ddp_packet*)malloc(sizeof(ddp_packet)); //new ddp_packet;
+        pkt->hdr = (ddp_hdr*)malloc(sizeof(ddp_hdr));
+	pkt->hdr->untagged = (ddp_untagged_hdr*)malloc(sizeof(ddp_untagged_hdr));
         pkt->hdr->untagged->reserved = 1;//hdr->reserved;
 	pkt->hdr->untagged->reserved2 = static_cast<uint32_t>(reserved & 0xFFFFFFFF);
 	pkt->hdr->untagged->reservedULP = reserved >> 32;
@@ -144,7 +147,32 @@ int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* 
         }
 	std::cout<<"\n";
         offset = offset + data_size;
+	//char* stream;
+	char *buf = new char[34];
+	buf[0] = reinterpret_cast<unsigned char>(pkt->hdr->untagged->reserved);
+	buf[1] = reinterpret_cast<unsigned char>(pkt->hdr->untagged->reservedULP);
+	sprintf(buf+2,"%lu", pkt->hdr->untagged->reserved2);
+	sprintf(buf+6, "%lu", pkt->hdr->untagged->qn);
+	sprintf(buf+10, "%lu", pkt->hdr->untagged->msn);
+	sprintf(buf+14, "%lu", pkt->hdr->untagged->mo);
+	for(int i = 0;i<len;i++){
+	buf[18+i] = datac[i];
+	}
+	//ibuf[2] = reinterpret_cast<unsigned char>(pkt->hdr->untagged->reserved[2]);
+	//char* stream = reinterpret_cast<char*>(pkt->hdr->untagged->reservedULP);
+	std::cout<<"hello "<<sizeof(ddp_packet)<<"\n";
+	//stream = (char*)malloc(sizeof(ddp_packet));
+	//std::cout<<"stream "<<sizeof(stream)<<"\n";
+	//std::memcpy(stream, pkt,sizeof(ddp_packet));
+	//for (i = 0;i<sizeof(ddp_packet);i++)
+	//std::cout << "'" << stream[i] << "', ";
+	//STATIC_ASSERT( sizeof *ddp_packet == sizeof *buffer * (2 * MAX + 1) );
+	//std::cout<<"hella\n";
         pkts[i] = *pkt;
+	std::cout<<"going in mpa send\n";
+	mpa_send(ctx->sockfd, buf, 18+len, 1);
+	std::cout<<"coming from mpa send\n";
+	//pkts[i] = *pkt;
 	//pkts.push_back(pkts);
     }
     for(int i = 0;i<num_packets;i++){
@@ -156,7 +184,8 @@ int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* 
         std::cout<<"pkt msn: "<<pkt.hdr->untagged->msn<<"\n";
         std::cout<<"pkt mo/offset: "<<pkt.hdr->untagged->mo<<"\n";
     }
-    mpa_send_rr(ctx->sockfd, pkts, num_packets, 1);
+    //char* stream = std::memcpy(data, &pkts, sizeof(ddp_packet));//reinterpret_cast<char*>(*pkts);
+    //mpa_send(ctx->sockfd, stream, 1, 1);
 }
 
 int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* pkt){
