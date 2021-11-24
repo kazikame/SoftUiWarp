@@ -100,7 +100,7 @@
  */
 
 //! Init DDP Stream, Queue setup, recv/send thread start
-struct rdmap_stream_context* rdmap_init_stream(int sockfd, struct pd_t* pd);
+int rdmap_init_stream(struct rdmap_stream_context* ctx);
 
 //! Free ddp stream structures
 void rdmap_kill_stream(struct rdmap_stream_context* ctx);

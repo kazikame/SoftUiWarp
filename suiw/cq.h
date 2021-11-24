@@ -129,8 +129,6 @@ int poll_cq(struct cq *cq, int num_entries, struct work_completion *wc) {
 }
 
 
-
-
 /** Work Queues **/
 
 enum wq_state {
@@ -213,12 +211,64 @@ struct wq {
 	enum wq_state       state;
 	enum wq_type	wq_type;
     union {
-        moodycamel::BlockingConcurrentQueue<recv_wr>* send_q;
-        moodycamel::BlockingConcurrentQueue<send_wr>* recv_q;
+        moodycamel::BlockingConcurrentQueue<send_wr>* send_q;
+        moodycamel::BlockingConcurrentQueue<recv_wr>* recv_q;
     };
 	uint32_t		events_completed;
 	uint32_t		comp_mask;
 };
 
+struct wq_init_attr {
+	void		       *wq_context;
+	enum wq_type	wq_type;
+	uint32_t		max_wr;
+	uint32_t		max_sge;
+	struct	pd	       *pd;
+	struct	cq	       *cq;
+	uint32_t		comp_mask; /* Use wq_init_attr_mask */
+};
+
+struct wq* create_wq(struct rdmap_stream_context *context,
+					   struct wq_init_attr *wq_init_attr) {
+    
+    struct wq* q = (struct wq*)malloc(sizeof(struct wq));
+
+    q->context = context;
+    q->pd = wq_init_attr->pd;
+    q->cq = wq_init_attr->cq;
+    q->wq_type = wq_init_attr->wq_type;
+    switch(wq_init_attr->wq_type)
+    {
+        case WQT_SQ: {
+            q->send_q = new moodycamel::BlockingConcurrentQueue<send_wr>(wq_init_attr->max_wr);
+            break;
+        }
+        case WQT_RQ: {
+            q->recv_q = new moodycamel::BlockingConcurrentQueue<recv_wr>(wq_init_attr->max_wr);
+            break;
+        }
+    }
+    q->comp_mask = wq_init_attr->comp_mask;
+
+    return q;
+}
+
+int destroy_wq(struct wq* q)
+{
+    switch(q->wq_type)
+    {
+        case WQT_SQ: {
+            delete q->send_q;
+            break;
+        }
+        case WQT_RQ: {
+            delete q->recv_q;
+            break;
+        }
+    }
+
+    free(q);
+    return 0;
+}
 
 #endif

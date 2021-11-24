@@ -41,6 +41,7 @@
 
 #include "ddp_new.h"
 #include "common/iwarp.h"
+#include "cq.h"
 
 struct rdmap_ctrl {
     __u8 bits;
@@ -99,12 +100,17 @@ enum rdmap_opcode {
     TERMINATE = 0x0111B
 };
 
-//! Strict subset of ddp_stream_context
 struct rdmap_stream_context {
-    struct ddp_stream_context* ddp_ctx;
+    int sockfd;
+    struct pd_t* pd;
+    
+    int connected = 0;
 
-    int terminated = 0;
-    //! TODO: Add completion queue stuff?
+    struct wq* send_q;
+    struct wq* recv_q;
+
+    //! 
+    struct ddp_stream_context* ddp_ctx;
 };
 
 #endif
