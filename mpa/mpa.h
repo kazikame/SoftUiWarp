@@ -100,10 +100,19 @@ int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags);
  * 
  * info struct must be pointing to valid memory
  * 
+ * @note instead of receiving the entire packet in one go
+ *       this function can be called multiple times.
+ *       Each invocation will change info->bytes_received.
+ *       The *first* invocation per packet will fill in the ulpdu_len
+ *       and other header fields.
+ *       Each invocation will directly copy the _remaining_
+ *       ulpdu bytes to info->ulpdu (no offset will be added).
+ * 
  * @param sockfd TCP socket connection
  * @param info pointer to packet struct
+ * @param num_bytes number of bytes of ulpdu to read
  * @return int numbers of bytes received, negative if error
  */
-int mpa_recv(int sockfd, struct siw_mpa_packet* info);
+int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes);
 
 #endif

@@ -153,7 +153,7 @@ int main(int argc, char **argv)
     char packet[1000] = "";
     struct siw_mpa_packet info;
     info.ulpdu = packet;
-    ret = mpa_recv(sockfd, &info);
+    ret = mpa_recv(sockfd, &info, EMSS);
     lwlog_info("%s",info.ulpdu);
     sleep(10);
 }

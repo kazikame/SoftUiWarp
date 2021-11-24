@@ -273,21 +273,27 @@ int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags)
     return ret;
 }
 
-int mpa_recv(int sockfd, struct siw_mpa_packet* info)
+int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes)
 {
-    int bytes_rcvd = 0;
-
-    //! Get header
-    int rcvd = recv(sockfd, &info->ulpdu_len, MPA_HDR_SIZE, 0);
-
-    if (rcvd < sizeof(__u16))
+    //! If receiving the packet for the first time, get MPA header
+    int rcvd = 0;
+    if (info->bytes_rcvd < MPA_HDR_SIZE)
     {
-        lwlog_err("mpa_recv: didn't receive enough bytes");
-        return -1;
+        int bytes_rcvd = info->bytes_rcvd;
+
+        //! Get header
+        rcvd = recv(sockfd, (void*)&info->ulpdu_len + (uint)bytes_rcvd, MPA_HDR_SIZE - bytes_rcvd, 0);
+
+        if (rcvd < MPA_HDR_SIZE - bytes_rcvd)
+        {
+            lwlog_err("mpa_recv: didn't receive enough bytes");
+            return -1;
+        }
+        info->bytes_rcvd = MPA_HDR_SIZE;
     }
-    bytes_rcvd += rcvd;
 
     int packet_len = ntohs(info->ulpdu_len);
+    
     lwlog_info("Received MPA Message Header: %d", packet_len);
 
     if (packet_len <= 0)
@@ -296,31 +302,51 @@ int mpa_recv(int sockfd, struct siw_mpa_packet* info)
         return -2;
     }
 
-    //! Get payload
-    int padding_len = (MPA_HDR_SIZE+packet_len)%4;//(sizeof(packet_len) + packet_len) % 4;
-    int payload_len = packet_len + padding_len;
-    rcvd = recv(sockfd, info->ulpdu, payload_len, 0);
+    int ulpdu_rem_size = packet_len - (info->bytes_rcvd - MPA_HDR_SIZE);
 
-    if (rcvd != payload_len)
+    int num_bytes_to_read = num_bytes;
+    int read_trailers = 0;
+    //! If `num_bytes` to read are more than the remaining payload left,
+    //! then read the trailers as well
+    if (ulpdu_rem_size <= num_bytes)
+    {
+        num_bytes_to_read = ulpdu_rem_size;
+        read_trailers = 1;
+    }
+    
+    rcvd = recv(sockfd, info->ulpdu, num_bytes_to_read, 0);
+
+    if (rcvd < num_bytes_to_read)
     {
         lwlog_err("mpa_recv: didn't receive enough bytes after header (%d)", rcvd);
         return -1;
     }
-    bytes_rcvd += rcvd;
 
-    //! Get crc
-    rcvd = recv(sockfd, &info->crc, MPA_CRC_SIZE, 0);
+    info->bytes_rcvd += rcvd;
 
-    if (rcvd != MPA_CRC_SIZE)
+    if (read_trailers)
     {
-        lwlog_err("mpa_recv: didn't receive enough bytes for crc (%d)", rcvd);
-        return -1;
+        //! Get padding
+        int padding_len = (packet_len + MPA_HDR_SIZE) % 4;
+        rcvd = recv(sockfd, &info->crc, padding_len, 0);
+        if (rcvd < padding_len)
+        {
+            lwlog_err("mpa_recv: didn't receive enough bytes for padding (%d)", rcvd);
+            return -1;
+        }
+        info->bytes_rcvd += rcvd;
+
+        //! Get crc
+        rcvd = recv(sockfd, &info->crc, MPA_CRC_SIZE, 0);
+        if (rcvd != MPA_CRC_SIZE)
+        {
+            lwlog_err("mpa_recv: didn't receive enough bytes for crc (%d)", rcvd);
+            return -1;
+        }
+        info->bytes_rcvd += rcvd;
+
+        //! TODO: Check CRC
     }
-    bytes_rcvd += rcvd;
 
-    //! TODO: Check CRC
-
-    info->bytes_rcvd = bytes_rcvd;
-
-    return bytes_rcvd;
+    return info->bytes_rcvd;
 }

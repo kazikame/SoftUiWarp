@@ -6,7 +6,7 @@ project (SoftUiWarp VERSION 1 DESCRIPTION "SoftiWARP in Userspace")
 set (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # iWARP include and library path.
-set (IWARP_DIR "/users/tkhan27/softiwarp-user-for-linux-rdma/build")
+set (IWARP_DIR "~/softiwarp-user-for-linux-rdma/build")
 set (IWARP_INCLUDE_DIR "${IWARP_DIR}/include")
 set (IWARP_LIB_DIR "${IWARP_DIR}/lib")
 
