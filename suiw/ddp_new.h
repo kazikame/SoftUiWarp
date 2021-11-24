@@ -110,7 +110,7 @@ int ddp_recv(struct ddp_stream_context*, struct ddp_message*);
 int register_untagged_buffer(struct ddp_stream_context*, int qn, int max_buffer_size, int length);
 int deregister_untagged_buffer(struct ddp_stream_context*, int qn);
 
-int register_tagged_buffer(struct ddp_stream_context*, struct stag_t*, struct tagged_buffer*);
+int register_tagged_buffer(struct ddp_stream_context*, struct tagged_buffer*);
 void deregister_tagged_buffer(struct ddp_stream_context*, struct stag_t*);
 
 
