@@ -1,0 +1,61 @@
+
+
+
+1. ddp_send(...): Send upto 2^32-1 bytes. this functions segments data into multiple MPA packets and calls mpa_send on each one of them.
+
+2. ddp_recv(struct ddp_message* message): Receive an entire untagged or tagged message. Copy the packet directly into the respective buffer. Return with:
+                    a) pointer to the start of the message
+                    b) type of the message
+                    c) RsvdULP stuff! !
+                    - MUST get data DIRECTLY into the respective buffer.
+
+    Salient details:
+    1. the input `ddp_message` is ALREADY ALLOCATED
+
+ddp_recv() {
+    struct siw_mpa_packet* message = malloc();
+    struct ddp_header hdr;
+    message->ulpdu = &hdr;
+    size_of_the_packet = mpa_recv(message, sizeof(DDP_HEADER));
+
+    if (hdr->T) // Tagged
+    {
+        message->ulpdu = stag_to_pointer[hdr->stag];
+        mpa_recv(message, size_of_the_packet - DDP_HDR_SIZE);
+    }
+}
+
+3. register_untagged_buffer(int qn, int max_buffer_size, int queue_len);
+
+4. deregister_untagged_buffer(int qn);
+
+5. queue_array
+    - queue.h
+    - array
+
+6. register_tagged_buffer(stag_t* stag, void* pointer_to_memory, int len)
+
+7. ddp_init()
+
+8. ddp_kill()
+
+struct ddp_message {
+    void* data;
+    int len;
+    int T;
+    union {
+        struct tagged_metadata tagged_meta;
+        struct untagged_metadata untagged_meta;
+    };
+};
+
+struct tagged_metadata {
+    stag_t stag;
+    __u64 TO
+};
+
+struct untagged_metadata {
+    __u8 rsvdULP1;
+    __u32 rsvdULP2;
+    __u32 msn;
+};
