@@ -146,7 +146,9 @@ int main(int argc, char **argv)
       //  data[i] = 't';
     //}
     printf("before send");
-    ret = ddp_tagged_send(ctx, stag, 0, data, 16, 67);
+    struct ddp_stream_context* ctx, struct stag_t* tag, void* data, uint32_t len, 
+                    uint64_t reserved, uint32_t qn, uint32_t msn)
+    ret = ddp_untagged_send(ctx, stag, data, 16, 287762808832, 0, 1);
     printf("done\n");
     char packet[1000] = "";
     struct siw_mpa_packet info;

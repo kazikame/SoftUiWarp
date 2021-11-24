@@ -70,14 +70,17 @@ int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint32_t
     uint32_t num_packets = (len/data_size);
     if(len%data_size != 0)
         num_packets++;
+    std::cout<<"num packets are "<<num_packets<<"\n";
     ddp_packet *pkts = new ddp_packet[num_packets];
     for(uint32_t i = 0;i<len;i = i + data_size){
+        std::cout<<"for loop send "<<len<<"\n";
         ddp_packet* pkt = new ddp_packet;
         pkt->hdr = new ddp_hdr;
         pkt->hdr->tagged = hdr;
         pkt->hdr->tagged->to = offset;
         if(i+data_size>=len){
-            pkt->data = new char[len-i+1];
+            pkt->data = new char[data_size];//len-i+1
+            std::cout<<"if of last "<<data_size<<"\n";
             pkt->hdr->tagged->reserved = pkt->hdr->tagged->reserved | 64; //bit set for last packet;
         }
         else{
@@ -86,7 +89,7 @@ int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint32_t
         for(uint32_t j = i, k = 0;k<data_size && j<len;j++,k++){
             pkt->data[k] = datac[j];
         }
-        offset = offset + data_size;
+    offset = offset + data_size;
 	print_ddp(pkts, log_buf1);
         pkts[i] = *pkt;
     }
@@ -112,6 +115,7 @@ int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* 
     uint32_t num_packets = (len/data_size);
     if(len%data_size != 0)
         num_packets++;
+    std::cout<<"num packets are "<<num_packets<<"\n";
     uint32_t offset = 0;
     ddp_packet *pkts = new ddp_packet[num_packets];
     for(uint32_t i = 0;i<len;i = i + data_size){
@@ -120,7 +124,8 @@ int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* 
         pkt->hdr->untagged = hdr;
         pkt->hdr->untagged->mo = offset;
         if(i+data_size>=len){
-            pkt->data = new char[len-i+1];
+            pkt->data = new char[data_size];//len-i+1
+            std::cout<<"if of last "<<data_size<<"\n";
             pkt->hdr->untagged->reserved = pkt->hdr->untagged->reserved | 64; //bit set for last packet;
         }
         else{
@@ -132,6 +137,7 @@ int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* 
         offset = offset + data_size;
         pkts[i] = *pkt;
     }
+    mpa_send_rr(ctx->sockfd, pkts, num_packets, 1);
 }
 
 int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* pkt){
@@ -173,6 +179,7 @@ int ddp_untagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* packet)
     uint32_t data_size = MULPDU-DDP_UNTAGGED_HDR_SIZE;
     //uint64_t ulp_key = pkt->hdr->untagged->reservedULP << 32 | pkt->hdr->untagged->reserved2;
     //uint32_t last = pkt->hdr->untagged->reserved & 64 ;
+
     return 0;
 }
     
