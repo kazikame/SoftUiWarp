@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <cassert>
 #include<cstring>
-#include <boost/archive/text_oarchive.hpp>
 #include <netdb.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -133,7 +132,7 @@ int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* 
 	pkt->hdr->untagged->qn = qn;
 	pkt->hdr->untagged->msn = msn%MOD32;
         if(i+data_size>=len){
-            pkt->data = new char[data_size];//len-i+1
+            pkt->data = new char[len-i+1];
             std::cout<<"if of last "<<data_size<<"\n";
 	    //pkt->hdr->untagged->reserved = hdr->reserved;
             pkt->hdr->untagged->reserved = pkt->hdr->untagged->reserved | 64; //bit set for last packet;
@@ -146,18 +145,24 @@ int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* 
             std::cout<<pkt->data[k]<<" ";
         }
 	std::cout<<"\n";
-        offset = offset + data_size;
+        //offset = offset + data_size;
 	//char* stream;
-	char *buf = new char[34];
+	char *buf = new char[18+len];
 	buf[0] = reinterpret_cast<unsigned char>(pkt->hdr->untagged->reserved);
 	buf[1] = reinterpret_cast<unsigned char>(pkt->hdr->untagged->reservedULP);
-	sprintf(buf+2,"%lu", pkt->hdr->untagged->reserved2);
-	sprintf(buf+6, "%lu", pkt->hdr->untagged->qn);
-	sprintf(buf+10, "%lu", pkt->hdr->untagged->msn);
-	sprintf(buf+14, "%lu", pkt->hdr->untagged->mo);
+	uint32_t reserved2 = reserved << 32;
+	buf[2] = reserved2 >> 24;buf[3] = reserved2 >> 16 , buf[4]= reserved2 >> 8, buf[5] = reserved2;
+	buf[6] = qn >> 24; buf[7] = qn >> 16; buf[8] = qn >> 8; buf[9] = qn;
+	buf[10] = msn >>24; buf[11] = msn >> 16; buf[12] = msn >> 8; buf[13] = msn;
+	buf[14] = offset >> 24; buf[15] = offset >> 16; buf[16] = offset >> 8; buf[17] = offset;
+	//sprintf(buf+2,"&#37;u", pkt->hdr->untagged->reserved2);
+	//sprintf(buf+6, "&#37;u", pkt->hdr->untagged->qn);
+	//sprintf(buf+10, "&#37;u", pkt->hdr->untagged->msn);
+	//sprintf(buf+14, "&#37;u", pkt->hdr->untagged->mo);
 	for(int i = 0;i<len;i++){
 	buf[18+i] = datac[i];
 	}
+	offset = offset + data_size;
 	//ibuf[2] = reinterpret_cast<unsigned char>(pkt->hdr->untagged->reserved[2]);
 	//char* stream = reinterpret_cast<char*>(pkt->hdr->untagged->reservedULP);
 	std::cout<<"hello "<<sizeof(ddp_packet)<<"\n";
