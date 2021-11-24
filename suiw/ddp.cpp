@@ -133,9 +133,20 @@ int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* 
         }
         for(uint32_t j = i, k = 0;k<data_size && j<len;j++,k++){
             pkt->data[k] = datac[j];
+            std::cout<<pkt->data[k]<<" ";
         }
+        cout<<"\n";
         offset = offset + data_size;
         pkts[i] = *pkt;
+    }
+    for(int i = 0;i<num_packets;i++){
+        ddp_packet pkt = pkt[i];
+        std::cout<<"pkt resreved byte: "<<pkt->hdr->untagged->reserved<<"\n";
+        std::cout<<"pkt reserved2: "<<pkt->hdr->untagged->reserved2<<"\n";
+        std::cout<<"pkt reservedULP: "<<pkt->hdr->untagged->reservedULP<<"\n";
+        std::cout<<"pkt queue number: "<<pkt->hdr->untagged->qn<<"\n";
+        std::cout<<"pkt msn: "<<pkt->hdr->untagged->msn<<"\n";
+        std::cout<<"pkt mo/offset: "<<pkt->hdr->untagged->mo<<"\n";
     }
     mpa_send_rr(ctx->sockfd, pkts, num_packets, 1);
 }
