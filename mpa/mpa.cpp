@@ -237,11 +237,6 @@ int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags)
 
     //! ULPDU
     char* pkt = static_cast<char*>(ulpdu);
-    std::cout<<"mpa char packet";
-    for(int i = 0;i<34;i++){
-	  std::cout<<pkt[i]<<" ";
-    }
-    std::cout<<"\n";
     iov[iovec_num].iov_base = ulpdu;
     iov[iovec_num].iov_len = len;
     iovec_num++;
