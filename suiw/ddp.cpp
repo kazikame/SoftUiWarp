@@ -18,11 +18,11 @@
 char log_buf1[1024];
 //using namespace std;
 
-tagged_buffer* stag_array[TAGGED_BUFFERS_NUM];
+tagged_buffer** stag_array = new tagged_buffer*[TAGGED_BUFFERS_NUM];
 
-untagged_buffer* qn_array[UNTAGGED_BUFFERS_NUM];
+untagged_buffer** qn_array = new untagged_buffer*[UNTAGGED_BUFFERS_NUM];
 
-uint32_t tag_to_pd[TAGGED_BUFFERS_NUM];
+uint32_t* tag_to_pd = new uint32_t[TAGGED_BUFFERS_NUM];
 
 ddp_stream_context* ddp_init_stream(int sockfd, struct pd* pd_id){
     ddp_stream_context* ddp_strem_ctx = new ddp_stream_context;
@@ -181,10 +181,6 @@ int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_message* message)
             move = move-8;
         }
         uint32_t stag = message->hdr->tagged->stag;
-        if(tag_to_pd[stag]==NULL){
-            lwlog_err("invalid stag");
-            return 0;
-        }
         if(ctx->pd_id->pd_id!=tag_to_pd[stag]){
             lwlog_err("invalid pd_id for the stag");
             return 0;
