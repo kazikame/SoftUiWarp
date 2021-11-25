@@ -12,20 +12,18 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include<map>
-#include<queue>
 #include "ddp.h"
 #include "mpa/mpa.h"
-#include "common/iwarp.h"
-
 #include "lwlog.h"
 char log_buf1[1024];
-char* tagged_buffer[TAGGED_BUFFERS_NUM];
-char* untagged_buffer[UNTAGGED_BUFFERS_NUM];
 //using namespace std;
-std::map<uint32_t,uint32_t> tag_to_pd;
-std::map<uint8_t, std::pair<u_int32_t, std::pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
-std::map<uint64_t, std::pair<u_int32_t, std::pair<u_int32_t, u_int32_t> > > ULP_to_untagged_buffer;
+
+tagged_buffer* stag_array[TAGGED_BUFFERS_NUM];
+
+untagged_buffer* qn_array[UNTAGGED_BUFFERS_NUM];
+
+uint32_t tag_to_pd[TAGGED_BUFFERS_NUM];
+
 ddp_stream_context* ddp_init_stream(int sockfd, struct pd* pd_id){
     ddp_stream_context* ddp_strem_ctx = new ddp_stream_context;
     ddp_strem_ctx->sockfd = sockfd;
@@ -45,19 +43,48 @@ int register_stag(struct stag_t* tag){
     return tag->id;
 }
 
-void register_tagged_buffer(){
-    for(int i = 0;i<TAGGED_BUFFERS_NUM;i++){
-	    //char* buff = new char[TAGGED_BUFFER_SIZE];
-	tagged_buffer[i] = new char[TAGGED_BUFFER_SIZE]; 
+void register_tagged_buffer(stag_t* stag, void* pointer_to_memory, int len){
+    if(stag->id >= TAGGED_BUFFERS_NUM){
+        lwlog_err("stag greater than allocated tagged buffers");
+        return;
     }
+    if(len > TAGGED_BUFFER_SIZE){
+        lwlog_err("length alllocated to tagged buffer is greater than max tagged buffer size");
+        return;
+    }
+    struct tagged_buffer* buf = (struct tagged_buffer*) malloc(sizeof(struct tagged_buffer));
+    buf->stag = stag->id;
+    if(pointer_to_memory == NULL){
+        pointer_to_memory = (char*)malloc(len*sizeof(char));
+    }
+    buf->data = pointer_to_memory;
+    buf->len = len;
+    stag_array[stag->id] = buf;
     return;
 }
-void register_untagged_buffer(){
-    for(int i = 0;i<UNTAGGED_BUFFERS_NUM;i++){
-	//char* buff = new char[UNTAGGED_BUFFER_SIZE];
-        untagged_buffer[i] = new char[UNTAGGED_BUFFER_SIZE]; 
+
+void  deregister_tagged_buffer(tagged_buffer* buf){
+    delete(buf);
+}
+
+void register_untagged_buffer(int qn, int queue_len){
+    if(qn >= UNTAGGED_BUFFERS_NUM){
+        lwlog_err("qn greater than allocated untagged buffers");
+        return;
     }
+    if(queue_len > UNTAGGED_BUFFER_SIZE){
+        lwlog_err("length alllocated to untagged buffer is greater than max untagged buffer size");
+        return;
+    }
+    struct untagged_buffer* buf = (struct untagged_buffer*) malloc(sizeof(struct untagged_buffer));
+    buf->data = (char*)malloc(len*sizeof(char));
+    buf->len = len;
+    qn_array[qn] = buf;
     return;
+}
+
+void  deregister_tagged_buffer(untagged_buffer* buf){
+    delete(buf);
 }
 
 int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint64_t offset, void* data, uint32_t len, uint8_t rsrvdULP){
@@ -122,46 +149,116 @@ int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* 
     }
 }
 
-int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* pkt){
-    uint32_t data_size = MULPDU-DDP_TAGGED_HDR_SIZE;
-    uint32_t stag = pkt->hdr->tagged->stag;
-    uint32_t last = pkt->hdr->tagged->reserved & 64 ;
-    if(tag_to_pd.find(stag)==tag_to_pd.end()){
-        lwlog_err("invalid stag");
-        return 0;
+int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* message){
+    struct siw_mpa_packet* info = (struct siw_mpa_packet*) malloc(sizeof(struct siw_mpa_packet));
+    mpa_recv(ctx->sockfd, info, 1); //can do this in only one mpa_recv, change in ddp_recv_tag/untag a bit in input params
+    uint8_t resv = info->ulpdu[0];
+    int data_size = 0;
+    if(resv&128==1){
+        message->type = 1;
+        data_size = ddp_tagged_recv(ctx,message);
     }
-    if(ctx->pd_id->pd_id!=tag_to_pd[stag]){
-        lwlog_err("invalid pd_id for the stag");
-        return 0;
+    else{
+        message->type = 0;
+        data_size = ddp_untagged_recv(ctx,message);
     }
-    uint32_t offset = pkt->hdr->tagged->to;
-    for(uint32_t i = 0;i<data_size;i++){
-        if(offset+i>=TAGGED_BUFFER_SIZE)
-        {
-            lwlog_err("buffer comsumed already");
+    return data_size;
+}
+
+int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_message* message){
+    int num_packets = 0;
+    int data_size = 0;
+    while(1){
+        struct siw_mpa_packet* info = (struct siw_mpa_packet*) malloc(sizeof(struct siw_mpa_packet));
+        mpa_recv(ctx->sockfd, info, MUL_PDU);
+        num_packets++;
+        int ptr = 0;
+        message->hdr->tagged->reserved = info->ulpdu[ptr++]; //maybe need to put this in ddp_recv
+        message->hdr->tagged->reservedULP = info->ulpdu[ptr++];
+        for(int i = 0;i<4;i++){
+            int move = 24;
+            message->hdr->tagged->stag = info->ulpdu[ptr++] << move;
+            move = move-8;
+        }
+        uint32_t stag = message->hdr->tagged->stag;
+        if(tag_to_pd[stag]==NULL){
+            lwlog_err("invalid stag");
             return 0;
         }
-        if(pkt->data[i]==NULL){
-            data_size = i+1;
+        if(ctx->pd_id->pd_id!=tag_to_pd[stag]){
+            lwlog_err("invalid pd_id for the stag");
+            return 0;
+        }
+        for(int i = 0;i<8;i++){
+            int move = 56;
+            message->hdr->tagged->to = info->ulpdu[ptr++] << move;
+            move = move-8;
+        }
+        uint64_t offset = message->hdr->tagged->to;
+        data_size += (info->ulpdu_len - DDP_TAGGED_HDR_SIZE);
+        tagged_buffer* buf = stag_array[stag];
+        if(num_packets == 1){
+            message->data = *buf->data[offset]; //pointer to offset at tag buffer
+            message->tag_buf = buf;
+        }
+        while(ptr < info->ulpdu_len){
+            buf->data[offset++] =  info->ulpdu[ptr++];
+        }
+        if(message->hdr->tagged->reserved&64==1){ //last packet for this message
+            message->len = data_size;
+            std::cout<<"num packets received tagged "<<num_packets<<"\n";
             break;
         }
-        tagged_buffer[stag][offset+i] = pkt->data[i];
     }
-    uint8_t ulp_key= pkt->hdr->tagged->reservedULP;
-    if(ULP_to_tagged_buffer.find(ulp_key)==ULP_to_tagged_buffer.end()){
-        ULP_to_tagged_buffer[ulp_key] = std::make_pair(stag, std::make_pair(offset,0));
-    }
-    if(last==64){
-        ULP_to_tagged_buffer[ulp_key].second.second = offset+data_size-1;
-    }
-    return ulp_key; //reservedULP need to be returned to the fn, so returned that for now. 
+    return data_size; //length of the message
 }
-//TODO: finish untagged recv ddp 
-int ddp_untagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* packet){
-    uint32_t data_size = MULPDU-DDP_UNTAGGED_HDR_SIZE;
-    //uint64_t ulp_key = pkt->hdr->untagged->reservedULP << 32 | pkt->hdr->untagged->reserved2;
-    //uint32_t last = pkt->hdr->untagged->reserved & 64 ;
 
-    return 0;
+int ddp_untagged_recv(struct ddp_stream_context* ctx, struct ddp_message* message){
+    int num_packets = 0;
+    int data_size = 0;
+    while(1){
+        struct siw_mpa_packet* info = (struct siw_mpa_packet*) malloc(sizeof(struct siw_mpa_packet));
+        mpa_recv(ctx->sockfd, info, MUL_PDU);
+        num_packets++;
+        int ptr = 0;
+        message->hdr->untagged->reserved = info->ulpdu[ptr++]; //maybe need to put this in ddp_recv
+        message->hdr->untagged->reservedULP = info->ulpdu[ptr++];
+        for(int i = 0;i<4;i++){
+            int move = 24;
+            message->hdr->untagged->reserved2 = info->ulpdu[ptr++] << move;
+            move = move-8;
+        }
+        for(int i = 0;i<4;i++){
+            int move = 24;
+            message->hdr->untagged->qn = info->ulpdu[ptr++] << move;
+            move = move-8;
+        }
+        for(int i = 0;i<4;i++){
+            int move = 24;
+            message->hdr->untagged->msn = info->ulpdu[ptr++] << move;
+            move = move-8;
+        }
+        for(int i = 0;i<4;i++){
+            int move = 24;
+            message->hdr->untagged->mo = info->ulpdu[ptr++] << move;
+            move = move-8;
+        }
+        uint64_t offset = message->hdr->untagged->mo;
+        data_size += (info->ulpdu_len - DDP_TAGGED_HDR_SIZE);
+        untagged_buffer* buf = qn_array[message->hdr->untagged->qn];
+        if(num_packets == 1){
+            message->data = buf->data; //pointer to offset at tag buffer
+            message->untag_buf = buf;
+        }
+        while(ptr < info->ulpdu_len){
+            buf->data[offset++] =  info->ulpdu[ptr++];
+        }
+        if(message->hdr->tagged->reserved&64==1){ //last packet for this message
+            message->len = data_size;
+            std::cout<<"num packets received untagged "<<num_packets<<"\n";
+            break;
+        }
+    }
+    return data_size;
 }
     
