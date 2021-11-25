@@ -96,14 +96,14 @@ struct work_completion {
 
 struct cq {
     struct rdmap_stream_context* ctx;
-    moodycamel::BlockingConcurrentQueue<work_completion>* q;
+    moodycamel::ConcurrentQueue<work_completion>* q;
 };
 
 struct cq* create_cq(struct rdmap_stream_context* ctx, int num_cqe) {
     struct cq* cq = (struct cq*)malloc(sizeof(struct cq));
 
     cq->ctx = ctx;
-    cq->q = new moodycamel::BlockingConcurrentQueue<work_completion>(num_cqe);
+    cq->q = new moodycamel::ConcurrentQueue<work_completion>(num_cqe);
 
     return cq;
 }
@@ -163,16 +163,18 @@ struct recv_wr {
 
 enum wr_opcode {
 	WR_RDMA_WRITE,
-	WR_RDMA_WRITE_WITH_IMM,
+	// WR_RDMA_WRITE_WITH_IMM,
 	WR_SEND,
-	WR_SEND_WITH_IMM,
+	// WR_SEND_WITH_IMM,
 	WR_RDMA_READ,
-	WR_ATOMIC_CMP_AND_SWP,
-	WR_ATOMIC_FETCH_AND_ADD,
-	WR_LOCAL_INV,
-	WR_BIND_MW,
+	//WR_ATOMIC_CMP_AND_SWP,
+	//WR_ATOMIC_FETCH_AND_ADD,
+	//WR_LOCAL_INV,
+	//WR_BIND_MW,
 	WR_SEND_WITH_INV,
-	WR_TSO,
+	WR_SEND_WITH_SE,
+	WR_SEND_WITH_INV_SE,
+	//WR_TSO,
 };
 
 struct send_wr {
@@ -211,8 +213,8 @@ struct wq {
 	enum wq_state       state;
 	enum wq_type	wq_type;
     union {
-        moodycamel::BlockingConcurrentQueue<send_wr>* send_q;
-        moodycamel::BlockingConcurrentQueue<recv_wr>* recv_q;
+        moodycamel::ConcurrentQueue<send_wr>* send_q;
+        moodycamel::ConcurrentQueue<recv_wr>* recv_q;
     };
 	uint32_t		events_completed;
 	uint32_t		comp_mask;
@@ -240,11 +242,11 @@ struct wq* create_wq(struct rdmap_stream_context *context,
     switch(wq_init_attr->wq_type)
     {
         case WQT_SQ: {
-            q->send_q = new moodycamel::BlockingConcurrentQueue<send_wr>(wq_init_attr->max_wr);
+            q->send_q = new moodycamel::ConcurrentQueue<send_wr>(wq_init_attr->max_wr);
             break;
         }
         case WQT_RQ: {
-            q->recv_q = new moodycamel::BlockingConcurrentQueue<recv_wr>(wq_init_attr->max_wr);
+            q->recv_q = new moodycamel::ConcurrentQueue<recv_wr>(wq_init_attr->max_wr);
             break;
         }
     }

@@ -39,8 +39,8 @@
  */
 
 #include <stdlib.h>
-#include <lwlog.h>
-#include <buffer.h>
+#include "lwlog.h"
+#include "buffer.h"
 #include <linux/types.h>
 #include <asm/byteorder.h>
 
@@ -48,6 +48,7 @@
 #include <unordered_map>
 
 #define MAX_UNTAGGED_BUFFERS 5
+#define DDP_CTRL_SIZE 1
 
 struct ddp_stream_context {
     int sockfd;
@@ -69,6 +70,11 @@ enum {
     DDP_HDR_DV = 0x3 << 8,
     DDP_HDR_RSVDULP = 0xFF
 };
+
+inline int ddp_is_tagged(__u16 bits)
+{
+    return DDP_HDR_T & bits;
+}
 
 struct ddp_tagged_meta {
     __u32 tag;

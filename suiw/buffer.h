@@ -40,7 +40,7 @@
 #define _BUFFERS_H
 
 #include <stdlib.h>
-#include <blockingconcurrentqueue.h>
+#include "blockingconcurrentqueue.h"
 #include <lwlog.h>
 #include <linux/types.h>
 #include <asm/byteorder.h>
@@ -51,7 +51,7 @@ struct untagged_buffer {
 };
 
 struct untagged_buffer_queue {
-    moodycamel::BlockingConcurrentQueue<struct untagged_buffer> q;
+    moodycamel::ConcurrentQueue<struct untagged_buffer> q;
 };
 
 struct pd_t {

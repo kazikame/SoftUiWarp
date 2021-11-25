@@ -42,6 +42,7 @@
 #include "ddp_new.h"
 #include "common/iwarp.h"
 #include "cq.h"
+#include <pthread.h>
 
 struct rdmap_ctrl {
     __u8 bits;
@@ -102,15 +103,20 @@ struct rdmap_terminate_hdr {
 
 /* RFC 5040 */
 enum rdmap_opcode {
-    WRITE = 0x0000B,
-    READ_REQUEST = 0x0001B,
-    READ_RESPONSE = 0x0010B,
-    SEND = 0x0011B,
-    SEND_SOLICIT = 0x0101B,
-    SEND_INVALIDATE = 0x0100B,
-    SEND_SOLICIT_INVALIDATE = 0x0110B,
-    TERMINATE = 0x0111B
+    WRITE = 0,
+    READ_REQUEST = 1,
+    READ_RESPONSE = 2,
+    SEND = 3,
+    SEND_INVALIDATE = 4,
+    SEND_SOLICIT = 5,
+    SEND_SOLICIT_INVALIDATE = 6,
+    TERMINATE = 7,
 };
+
+static inline __u8 get_rdmap_op(__u8 bits)
+{
+    return bits & 0xF;
+}
 
 struct rdmap_stream_context {
     struct ddp_stream_context* ddp_ctx;
@@ -118,6 +124,9 @@ struct rdmap_stream_context {
 
     struct wq* send_q;
     struct wq* recv_q;
+
+    pthread_t recv_thread;
+    pthread_t send_thread;
 };
 
 struct rdmap_stream_init_attr {
@@ -126,11 +135,6 @@ struct rdmap_stream_init_attr {
     
     struct wq* send_q;
     struct wq* recv_q;
-
-    int send_buffer_size;
-    int send_buffer_len;
-    int read_buffer_size;
-    int read_buffer_len;
 };
 
 #endif

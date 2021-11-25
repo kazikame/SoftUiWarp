@@ -15,7 +15,7 @@ add_subdirectory (libsuiw)
 add_subdirectory (libibverbs)
 add_subdirectory (librdmacm)
 
-add_library (SoftUiWarp suiw/ddp.cpp mpa/mpa.cpp common/iwarp.cpp)
+add_library (SoftUiWarp suiw/ddp.cpp mpa/mpa.cpp common/iwarp.cpp suiw/rdmap.cpp)
 target_include_directories (SoftUiWarp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable (fake_ping_client fake_ping_client.cpp)

@@ -108,6 +108,15 @@ void rdmap_kill_stream(struct rdmap_stream_context* ctx);
 //! Not overriding tagged buffer registration functions
 //! Use rdmap_stream_context->ddp_ctx for those
 
+/**
+ * @brief RDMA Send op.
+ * 
+ * @param message 
+ * @param len 
+ * @param invalidate_stag 
+ * @param flags 
+ * @return int 
+ */
 
 int rdmap_send(struct rdmap_stream_context*, void* message, __u32 len, stag_t* invalidate_stag, int flags);
 int rdmap_write(struct rdmap_stream_context*, void* message, __u32 len, stag_t* stag, __u32 offset);
@@ -124,4 +133,6 @@ int rdma_post_recv(struct rdmap_stream_context*, struct untagged_buffer* buf);
 int rdma_register(struct rdmap_stream_context*, struct tagged_buffer* buf);
 
 
+//! Printers
+void print_rdma_message(struct rdma_message* message, char* buf);
 #endif
