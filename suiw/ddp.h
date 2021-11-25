@@ -3,7 +3,7 @@
 /*
  * Software Userspace iWARP device driver for Linux
  *
- * Authors: Saksham Goel <saksham@cs.utexas.edu>
+ * Authors: Tarannum Khan <tarannum.khan@utexas.edu> , Saksham Goel <saksham@cs.utexas.edu>
  *
  * Copyright (c) 2021
  *
@@ -76,25 +76,28 @@ Basically:
     - if tagged, then must have sent an STag before using ULP
     - if untagged, then must have registered a series of ordered buffers by ULP
  */
+#include <stdlib.h>
 #include <linux/types.h>
 #include <asm/byteorder.h>
 #include <stdint.h>
 #include <stdio.h>
 #include<iostream>
-#include <map>
-#include <queue>
 #include "common/iwarp.h"
+#include "buffer.h"
+
 #define DDP_TAGGED_HDR_SIZE 14
 #define DDP_UNTAGGED_HDR_SIZE 18
-//#define MULPDU 1500 //const mulpdu for now
 #define TAGGED_BUFFERS_NUM 5 //TODO: change for ULP to define number of buffer
 #define UNTAGGED_BUFFERS_NUM 5 //TODO: change for ULP to define number of buffer
 #define TAGGED_BUFFER_SIZE 1000000 //TODO: change for ULP to define number of buffer
 #define UNTAGGED_BUFFER_SIZE 1000000 //TODO: change for ULP to define number of buffer
 #define MOD32 4294967296
+#define DDP_CTRL_SIZE 1
+
+
 struct ddp_tagged_hdr {
     uint8_t reserved;
-    uint8_t reservedULP; //is this requireed here or only in ULP?
+    uint8_t reservedULP;
     uint32_t stag;
     uint64_t to;
 };
@@ -117,9 +120,15 @@ struct ddp_hdr {
 };
 
 /* only for receiving */
-struct ddp_packet {
+struct ddp_message {
     struct ddp_hdr* hdr;
     char* data;
+    union {
+        struct untagged_buffer* untag_buf;
+        struct tagged_buffer* tag_buf;
+    };
+    int len; //length of the message
+    uint8_t; //type of message, tagged = 1, untagged = 0;
 };
 
 //! TODO: Take hint from siw.h, and complete
@@ -139,36 +148,32 @@ struct stag_t {
     struct pd* pd_id;
 };
 
-//std::map<uint32_t,uint32_t> tag_to_pd;
-
-//char *tagged_buffer[TAGGED_BUFFERS_NUM];
-//char *untagged_buffer[UNTAGGED_BUFFERS_NUM];
-
-//std::map<uint8_t, std::pair<u_int32_t, std::pair<u_int32_t, u_int32_t> > > ULP_to_tagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
-//std::map<uint64_t, std::pair<u_int32_t, std::pair<u_int32_t, u_int32_t> > > ULP_to_untagged_buffer; //stag and start and end (included) of the buffer for that ULP/message
-
 struct ddp_stream_context* ddp_init_stream(int sockfd, struct pd* pd_id);
 
 void ddp_kill_stream(struct ddp_stream_context* ctx);
 
 int register_stag(struct stag_t* tag);
 
-void register_tagged_buffer();
+void register_tagged_buffer(stag_t* stag, void* pointer_to_memory, int len);
 
-void register_untagged_buffer();
+void  deregister_tagged_buffer(tagged_buffer* buf);
+
+void register_untagged_buffer(int qn, int queue_len);
+
+void  deregister_untagged_buffer(untagged_buffer* buf);
+
+int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* message);
 
 //! Check validity (stag, etc.)
-int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* packet);
+int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_message* message);
+
+int ddp_untagged_recv(struct ddp_stream_context* ctx, struct ddp_message* message);
 
 //! Fragementation + Send
 int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint32_t offset, void* data, uint32_t len, uint8_t rsrvdULP);
 
-//! Register Queues
-//void register_tagged_queue();
-//void register_untagged_queue();
 //! Untagged send/recv
 int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* data, 
                     uint32_t len, uint64_t reserved, uint32_t qn, uint32_t msn);
-//! TODO: Test fake_ping_client by sending the next Send/Read Request data
 
 #endif
