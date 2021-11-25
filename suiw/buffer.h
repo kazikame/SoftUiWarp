@@ -40,39 +40,19 @@
 #define _BUFFERS_H
 
 #include <stdlib.h>
+#include <blockingconcurrentqueue.h>
 #include <lwlog.h>
 #include <linux/types.h>
 #include <asm/byteorder.h>
 
 struct untagged_buffer {
-    char* arr;
+    char* data;
     int len;
-    int buffer_size;
-    int index = 0;
 };
 
-struct untagged_buffer* allocate_untagged_buffer(int buffer_size, int num_buffers)
-{
-    struct untagged_buffer* q = (struct untagged_buffer*)malloc(sizeof(struct untagged_buffer));
-
-    q->buffer_size = buffer_size;
-    q->len = buffer_size * num_buffers;
-    q->arr = (char*)malloc(q->len);
-
-    if (!q->arr)
-    {
-        lwlog_err("out of memory");
-        free(q);
-        return NULL;
-    }
-    return q;
-}
-
-void deallocate_untagged_buffer(struct untagged_buffer* buf)
-{
-    free(buf->arr);
-    free(buf);
-}
+struct untagged_buffer_queue {
+    moodycamel::BlockingConcurrentQueue<struct untagged_buffer> q;
+};
 
 struct pd_t {
     __u32 pd_id;

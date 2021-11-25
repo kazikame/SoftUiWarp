@@ -64,7 +64,13 @@ struct rdmap_message {
     void* payload;
 };
 
-struct rdmap_tagged_hdr {
+/**
+ * According to RFC 5040.
+ * 
+ * For Read Request, Send, and Terminate
+ * 
+ */
+struct rdmap_untagged_hdr {
     __u32 tag;
     __u32 qn;
     __u32 msn;
@@ -78,7 +84,13 @@ struct rdmap_read_req_fields {
     __u32 src_TO;
 };
 
-struct rdmap_untagged_hdr {
+/**
+ * According to RFC 5040.
+ * 
+ * For Write, Read Response
+ * 
+ */
+struct rdmap_tagged_hdr {
     __u32 tag;
     __u64 TO;
 };
@@ -101,16 +113,24 @@ enum rdmap_opcode {
 };
 
 struct rdmap_stream_context {
-    int sockfd;
-    struct pd_t* pd;
-    
+    struct ddp_stream_context* ddp_ctx;
     int connected = 0;
 
     struct wq* send_q;
     struct wq* recv_q;
+};
 
-    //! 
-    struct ddp_stream_context* ddp_ctx;
+struct rdmap_stream_init_attr {
+    int sockfd;
+    struct pd_t* pd;
+    
+    struct wq* send_q;
+    struct wq* recv_q;
+
+    int send_buffer_size;
+    int send_buffer_len;
+    int read_buffer_size;
+    int read_buffer_len;
 };
 
 #endif

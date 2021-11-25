@@ -88,7 +88,10 @@ struct ddp_message {
         struct ddp_tagged_meta* tagged_metadata;
         struct ddp_untagged_meta* untagged_metadata;
     };
-    void* data;
+    union {
+        struct untagged_buffer* untag_buf;
+        struct tagged_buffer* tag_buf;
+    };
     int len;
 };
 
@@ -105,10 +108,16 @@ void ddp_kill_stream(struct ddp_stream_context* ctx);
 int ddp_send_tagged(struct ddp_stream_context*, struct ddp_tagged_meta*, void* data);
 int ddp_send_untagged(struct ddp_stream_context*, struct ddp_untagged_meta*, void* data);
 
-int ddp_recv(struct ddp_stream_context*, struct ddp_message*);
+/**
+ * @brief Registers a buffer in queue `qn` for an untagged message
+ *        Buffers are consumed in a FIFO manner
+ * 
+ * @param qn queue number in which the buffer is added
+ * @param buf buffer
+ */
+void ddp_post_recv(struct ddp_stream_context*, int qn, struct untagged_buffer* buf);
 
-int register_untagged_buffer(struct ddp_stream_context*, int qn, int max_buffer_size, int length);
-int deregister_untagged_buffer(struct ddp_stream_context*, int qn);
+int ddp_recv(struct ddp_stream_context*, struct ddp_message*);
 
 int register_tagged_buffer(struct ddp_stream_context*, struct tagged_buffer*);
 void deregister_tagged_buffer(struct ddp_stream_context*, struct stag_t*);

@@ -4,10 +4,14 @@
 
 
 //! Init DDP Stream, Queue setup, recv/send thread start
-int rdmap_init_stream(struct rdmap_stream_context* ctx) {
-    ctx->ddp_ctx = ddp_init_stream(ctx->sockfd, ctx->pd);
+struct rdmap_stream_context* rdmap_init_stream(struct rdmap_stream_init_attr* attr) {
 
-    //! Register untagged queues
+    struct rdmap_stream_context* ctx = (struct rdmap_stream_context*) malloc(sizeof(struct rdmap_stream_context));
+
+    //! Init DDP Stream
+    ctx->ddp_ctx = ddp_init_stream(attr->sockfd, attr->pd);
+
+    //! Register Untagged queue buffers
 }
 
 //! Free ddp stream structures
