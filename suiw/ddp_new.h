@@ -59,30 +59,31 @@ struct ddp_stream_context {
 };
 
 struct ddp_hdr {
-    __u16 bits;
+    __u8 bits;
 };
 
 enum {
-    // T|L| Rsvd  | DV|   RsvdULP     |
-    DDP_HDR_T = 1 << 15,
-    DDP_HDR_L = 1 << 14,
-    DDP_HDR_RSVD = 0xF << 10,
-    DDP_HDR_DV = 0x3 << 8,
-    DDP_HDR_RSVDULP = 0xFF
+    // T|L| Rsvd  | DV|
+    DDP_HDR_T = 1 << 7,
+    DDP_HDR_L = 1 << 6,
+    DDP_HDR_RSVD = 0xF << 2,
+    DDP_HDR_DV = 0x3,
 };
 
-inline int ddp_is_tagged(__u16 bits)
+inline int ddp_is_tagged(__u8 bits)
 {
     return DDP_HDR_T & bits;
 }
 
 struct ddp_tagged_meta {
+    __u8 rsvdULP1 = 0;
     __u32 tag;
     __u64 TO;
 };
 
 struct ddp_untagged_meta {
-    __u32 rsvdULP;
+    __u8 rsvdULP1 = 0;
+    __u32 rsvdULP2;
     __u32 qn;
     __u32 msn;
     __u32 mo;
@@ -101,6 +102,16 @@ struct ddp_message {
     int len;
 };
 
+//! TODO: Currently we only support a SINGLE sge per recv/send wr
+//!       Fix this.
+struct sge {
+	uint64_t		addr;
+	uint32_t		length;
+	
+    //! NO need of any lkey, MR are NOT registered since everything is in userspace anyway.
+    // uint32_t		lkey;
+};
+
 /**
  * @brief Inits a DDP stream
  * 
@@ -114,8 +125,8 @@ struct ddp_message {
 struct ddp_stream_context* ddp_init_stream(int sockfd, struct pd_t* pd);
 void ddp_kill_stream(struct ddp_stream_context* ctx);
 
-int ddp_send_tagged(struct ddp_stream_context*, struct ddp_tagged_meta*, void* data);
-int ddp_send_untagged(struct ddp_stream_context*, struct ddp_untagged_meta*, void* data);
+int ddp_send_tagged(struct ddp_stream_context*, struct ddp_tagged_meta*, sge* sge_list, int num_sge);
+int ddp_send_untagged(struct ddp_stream_context*, struct ddp_untagged_meta*, sge* sge_list, int num_sge);
 
 /**
  * @brief Registers a buffer in queue `qn` for an untagged message

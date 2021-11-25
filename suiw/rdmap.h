@@ -99,6 +99,10 @@
  * 
  */
 
+#define SEND_QN 0
+#define READ_QN 1
+#define TERMINATE_QN 2
+
 //! Init DDP Stream, Queue setup, recv/send thread start
 struct rdmap_stream_context* rdmap_init_stream(struct rdmap_stream_init_attr* ctx);
 

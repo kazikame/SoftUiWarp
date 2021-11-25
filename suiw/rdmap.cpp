@@ -66,32 +66,73 @@ void* rnic_send(void* ctx_ptr)
     struct rdmap_stream_context* ctx = (struct rdmap_stream_context*)ctx_ptr;
     assert(ctx->send_q->wq_type == WQT_SQ);
     moodycamel::ConcurrentQueue<send_wr>* q = ctx->send_q->send_q;
-    
+    moodycamel::ConcurrentQueue<work_completion>* cq = ctx->send_q->cq->q;
     send_wr req;
+
+    __u8 rdma_hdr = 1 << 6;
+    struct work_completion wce;
+    wce.src_qp = ctx->send_q->wq_num;
     while (ctx->connected)
     {
         int found = q->try_dequeue(req);
         if (!found) continue;
 
+        rdma_hdr |= req.opcode;
         switch(req.opcode)
         {
-        	case WR_SEND: {
+            case SEND_SOLICIT:
+        	case SEND: {
+                struct ddp_untagged_meta ddp_hdr;
+                
+                ddp_hdr.rsvdULP1 = rdma_hdr;
+                ddp_hdr.qn = SEND_QN;
+                int ret = ddp_send_untagged(ctx->ddp_ctx, &ddp_hdr, req.sg_list, req.num_sge);
+                
+                send_wr_to_wce(&req, &wce);
+                wce.byte_len = ret;
+                //! Notify completion queue
+                if (ret < 0)
+                {
+                    wce.status = WC_SUCCESS;
+                }
+                else 
+                {
+                    wce.status = WC_FATAL_ERR;
+                }
+                cq->enqueue(wce);
                 break;
             }
-            case WR_SEND_WITH_INV: {
+            case SEND_SOLICIT_INVALIDATE: 
+            case SEND_INVALIDATE: {
+                struct ddp_untagged_meta ddp_hdr;
+                
+                ddp_hdr.rsvdULP1 = rdma_hdr;
+                ddp_hdr.rsvdULP2 = req.invalidate_rkey;
+                ddp_hdr.qn = SEND_QN;
+                int ret = ddp_send_untagged(ctx->ddp_ctx, &ddp_hdr, req.sg_list, req.num_sge);
+                
+                send_wr_to_wce(&req, &wce);
+                wce.byte_len = ret;
+                //! Notify completion queue
+                if (ret < 0)
+                {
+                    wce.status = WC_SUCCESS;
+                }
+                else 
+                {
+                    wce.status = WC_FATAL_ERR;
+                }
+                cq->enqueue(wce);
                 break;
             }
-            case WR_SEND_WITH_SE: {
+        	case READ_REQUEST: {
                 break;
             }
-            case WR_SEND_WITH_INV_SE: {
+	        case WRITE: {
                 break;
             }
-        	case WR_RDMA_READ: {
-                break;
-            }
-	        case WR_RDMA_WRITE: {
-                break;
+            default: {
+                lwlog_err("Invalid request opcode: %d", req.opcode);
             }
         }
     }

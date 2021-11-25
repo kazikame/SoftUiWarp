@@ -35,27 +35,33 @@ enum wc_status {
 	WC_TM_RNDV_INCOMPLETE,
 };
 
+//! Strict superset of rdmap_opcode
 enum wc_opcode {
-	WC_SEND,
-	WC_RDMA_WRITE,
-	WC_RDMA_READ,
-	WC_COMP_SWAP,
-	WC_FETCH_ADD,
-	WC_BIND_MW,
-	WC_LOCAL_INV,
-	WC_TSO,
+	WC_WRITE = 0,
+    WC_READ_REQUEST = 1,
+    WC_READ_RESPONSE = 2,
+    WC_SEND = 3,
+    WC_SEND_INVALIDATE = 4,
+    WC_SEND_SOLICIT = 5,
+    WC_SEND_SOLICIT_INVALIDATE = 6,
+    WC_TERMINATE = 7,
+	// WC_COMP_SWAP,
+	// WC_FETCH_ADD,
+	// WC_BIND_MW,
+	// WC_LOCAL_INV,
+	// WC_TSO,
 /*
  * Set value of WC_RECV so consumers can test if a completion is a
  * receive by testing (opcode & WC_RECV).
  */
 	WC_RECV			= 1 << 7,
-	WC_RECV_RDMA_WITH_IMM,
+	// WC_RECV_RDMA_WITH_IMM,
 
-	WC_TM_ADD,
-	WC_TM_DEL,
-	WC_TM_SYNC,
-	WC_TM_RECV,
-	WC_TM_NO_TAG,
+	// WC_TM_ADD,
+	// WC_TM_DEL,
+	// WC_TM_SYNC,
+	// WC_TM_RECV,
+	// WC_TM_NO_TAG,
 };
 
 enum {
@@ -76,8 +82,8 @@ struct work_completion {
 	uint64_t		wr_id;
 	enum wc_status	status;
 	enum wc_opcode	opcode;
-	uint32_t		vendor_err;
-	uint32_t		byte_len;
+	uint32_t		vendor_err = 0;
+	uint32_t		byte_len = 0;
 	/* When (wc_flags & WC_WITH_IMM): Immediate data in network byte order.
 	 * When (wc_flags & WC_WITH_INV): Stores the invalidated rkey.
 	 */
@@ -87,8 +93,14 @@ struct work_completion {
 	};
 	uint32_t		qp_num;
 	uint32_t		src_qp;
-	unsigned int		wc_flags;
+
+	//! GSI/Immediate
+	unsigned int		wc_flags = 0;
+
+	//! Only for GSI QP
 	uint16_t		pkey_index;
+	
+	//! Only UD QP
 	uint16_t		slid;
 	uint8_t			sl;
 	uint8_t			dlid_path_bits;
@@ -143,16 +155,6 @@ enum wq_type {
     WQT_SQ
 };
 
-//! TODO: Currently we only support a SINGLE sge per recv/send wr
-//!       Fix this.
-struct sge {
-	uint64_t		addr;
-	uint32_t		length;
-	
-    //! NO need of any lkey, MR are NOT registered since everything is in userspace anyway.
-    // uint32_t		lkey;
-};
-
 //! Receive Work request is only for send response packets
 struct recv_wr {
 	uint64_t		wr_id;
@@ -161,34 +163,22 @@ struct recv_wr {
 	int			num_sge;
 };
 
-enum wr_opcode {
-	WR_RDMA_WRITE,
-	// WR_RDMA_WRITE_WITH_IMM,
-	WR_SEND,
-	// WR_SEND_WITH_IMM,
-	WR_RDMA_READ,
-	//WR_ATOMIC_CMP_AND_SWP,
-	//WR_ATOMIC_FETCH_AND_ADD,
-	//WR_LOCAL_INV,
-	//WR_BIND_MW,
-	WR_SEND_WITH_INV,
-	WR_SEND_WITH_SE,
-	WR_SEND_WITH_INV_SE,
-	//WR_TSO,
-};
-
 struct send_wr {
 	uint64_t		wr_id;
-	struct send_wr     *next;
+
+	//! Using moodycamel queues here
+	// struct send_wr     *next;
+
 	struct sge	       *sg_list;
 	int			num_sge;
-	enum wr_opcode	opcode;
+	enum rdmap_opcode	opcode;
 	unsigned int		send_flags;
 	/* When opcode is *_WITH_IMM: Immediate data in network byte order.
 	 * When opcode is *_INV: Stores the rkey to invalidate
 	 */
 	union {
-		__be32			imm_data;
+		//! Since everything is in userspace, no need of immediate
+		// __be32			imm_data;
 		uint32_t		invalidate_rkey;
 	};
     
@@ -271,6 +261,12 @@ int destroy_wq(struct wq* q)
 
     free(q);
     return 0;
+}
+
+int send_wr_to_wce(struct send_wr* wr, struct work_completion* wce)
+{
+	wce->wr_id = wr->wr_id;
+	wce->opcode = (enum wc_opcode)wr->opcode;
 }
 
 #endif
