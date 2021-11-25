@@ -47,7 +47,6 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include "suiw/ddp.h"
 #include "mpa.h"
 
 #include "lwlog.h"
@@ -220,14 +219,23 @@ int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_re
     return 0;
 }
 
-int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags)
+int mpa_send(int sockfd, sge* sg_list, int num_sge, int flags)
 {
     //! Make sendmsg() msg struct
     struct msghdr msg;
     memset(&msg, 0, sizeof(msg));
 
-    struct iovec iov[6];
+    struct iovec iov[5 + num_sge];
     int iovec_num = 0;
+
+    //! Find total Length of ULPDU
+    __u16 len = 0;
+    for (int i = 0; i < num_sge; i++)
+    {
+        len += sg_list[i].length;
+    }
+
+    if (len > EMSS) return -1;
 
     //! MPA Header
     __be16 mpa_len = htons(len);
@@ -236,10 +244,14 @@ int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags)
     iovec_num++;
 
     //! ULPDU
-    char* pkt = static_cast<char*>(ulpdu);
-    iov[iovec_num].iov_base = ulpdu;
-    iov[iovec_num].iov_len = len;
-    iovec_num++;
+    for (int i = 0; i < num_sge; i++)
+    {
+        char* pkt = (char*)(sg_list[i].addr);
+        iov[iovec_num].iov_base = pkt;
+        iov[iovec_num].iov_len = sg_list[i].length;
+        iovec_num++;
+    }
+
 
     //! Padding
     int padding_bytes = (len + sizeof(mpa_len)) % 4;
