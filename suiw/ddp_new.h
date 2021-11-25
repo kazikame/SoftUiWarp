@@ -107,9 +107,7 @@ struct ddp_message {
 struct sge {
 	uint64_t		addr;
 	uint32_t		length;
-	
-    //! NO need of any lkey, MR are NOT registered since everything is in userspace anyway.
-    // uint32_t		lkey;
+	uint32_t		lkey;
 };
 
 /**
@@ -139,6 +137,13 @@ void ddp_post_recv(struct ddp_stream_context*, int qn, struct untagged_buffer* b
 
 int ddp_recv(struct ddp_stream_context*, struct ddp_message*);
 
+/**
+ * @brief Registers a tagged memory region
+ * 
+ * The stag is filled by this function, and should be empty.
+ * 
+ * @return int 
+ */
 int register_tagged_buffer(struct ddp_stream_context*, struct tagged_buffer*);
 void deregister_tagged_buffer(struct ddp_stream_context*, struct stag_t*);
 

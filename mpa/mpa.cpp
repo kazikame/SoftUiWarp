@@ -277,7 +277,7 @@ int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes)
         int bytes_rcvd = info->bytes_rcvd;
 
         //! Get header
-        rcvd = recv(sockfd, (void*)&info->ulpdu_len + (uint)bytes_rcvd, MPA_HDR_SIZE - bytes_rcvd, 0);
+        rcvd = recv(sockfd, (char*)&info->ulpdu_len + (uint)bytes_rcvd, MPA_HDR_SIZE - bytes_rcvd, 0);
 
         if (rcvd < MPA_HDR_SIZE - bytes_rcvd)
         {

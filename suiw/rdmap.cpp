@@ -76,8 +76,8 @@ void* rnic_send(void* ctx_ptr)
     {
         int found = q->try_dequeue(req);
         if (!found) continue;
-
-        rdma_hdr |= req.opcode;
+        
+        rdma_hdr = (1 << 6) | req.opcode;
         switch(req.opcode)
         {
             case SEND_SOLICIT:
@@ -126,9 +126,59 @@ void* rnic_send(void* ctx_ptr)
                 break;
             }
         	case READ_REQUEST: {
+                struct ddp_untagged_meta ddp_hdr;
+                ddp_hdr.rsvdULP1 = rdma_hdr;
+                ddp_hdr.qn = READ_QN;
+                if (req.num_sge != 1)
+                {
+                    lwlog_err("Number of sge not 1 in read req (%d)", req.num_sge);
+                    break;
+                }
+
+                //! For reads, sge_list contains the read lkey (stag)
+                struct rdmap_read_req_fields fields;
+                fields.sink_tag = req.sg_list[0].lkey;
+                fields.sink_TO = req.sg_list[0].addr;
+                fields.src_tag = req.wr.rdma.rkey;
+                fields.src_TO = req.wr.rdma.remote_addr;
+                struct sge message;
+                message.addr = (uint64_t)&fields;
+                message.length = sizeof(struct rdmap_read_req_fields);
+                int ret = ddp_send_untagged(ctx->ddp_ctx, &ddp_hdr, &message, 1);
+                
+                send_wr_to_wce(&req, &wce);
+                wce.byte_len = ret;
+                //! Notify completion queue
+                if (ret < 0)
+                {
+                    wce.status = WC_SUCCESS;
+                }
+                else 
+                {
+                    wce.status = WC_FATAL_ERR;
+                }
+                cq->enqueue(wce);
                 break;
             }
 	        case WRITE: {
+                struct ddp_tagged_meta ddp_hdr;
+                ddp_hdr.rsvdULP1 = rdma_hdr;
+                ddp_hdr.tag = req.wr.rdma.rkey;
+                ddp_hdr.TO = req.wr.rdma.remote_addr;
+                int ret = ddp_send_tagged(ctx->ddp_ctx, &ddp_hdr, req.sg_list, req.num_sge);
+                
+                send_wr_to_wce(&req, &wce);
+                wce.byte_len = ret;
+                //! Notify completion queue
+                if (ret < 0)
+                {
+                    wce.status = WC_SUCCESS;
+                }
+                else 
+                {
+                    wce.status = WC_FATAL_ERR;
+                }
+                cq->enqueue(wce);
                 break;
             }
             default: {

@@ -401,4 +401,16 @@ struct siw_mpa_packet {
 	int bytes_rcvd = 0;
 };
 
+/* RFC 5040 */
+enum rdmap_opcode {
+    WRITE = 0,
+    READ_REQUEST = 1,
+    READ_RESPONSE = 2,
+    SEND = 3,
+    SEND_INVALIDATE = 4,
+    SEND_SOLICIT = 5,
+    SEND_SOLICIT_INVALIDATE = 6,
+    TERMINATE = 7,
+};
+
 #endif
