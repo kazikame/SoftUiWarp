@@ -53,7 +53,7 @@ struct ddp_stream_context {
     int sockfd;
     struct pd_t* pd;
 
-    untagged_buffer* queues[MAX_UNTAGGED_BUFFERS];
+    untagged_buffer_queue* queues;
     std::unordered_map<__u32, tagged_buffer*> tagged_buffers;
 };
 
@@ -97,6 +97,9 @@ struct ddp_message {
 
 /**
  * @brief Inits a DDP stream
+ * 
+ * makes the queues as well
+ * TODO: take input a new struct ddp_init_attr
  * 
  * @param sockfd MPA connected socket
  * @param pd protection domain

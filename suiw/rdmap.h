@@ -39,7 +39,7 @@
 #ifndef _RDMAP_H
 #define _RDMAP_H
 
-
+#include "buffer.h"
 #include "ddp_new.h"
 #include "rdmap_structs.h"
 #include "common/iwarp.h"
@@ -102,7 +102,7 @@
 //! Init DDP Stream, Queue setup, recv/send thread start
 struct rdmap_stream_context* rdmap_init_stream(struct rdmap_stream_init_attr* ctx);
 
-//! Free ddp stream structures
+//! Free ddp stream structures, kill threads
 void rdmap_kill_stream(struct rdmap_stream_context* ctx);
 
 //! Not overriding tagged buffer registration functions
@@ -112,5 +112,16 @@ void rdmap_kill_stream(struct rdmap_stream_context* ctx);
 int rdmap_send(struct rdmap_stream_context*, void* message, __u32 len, stag_t* invalidate_stag, int flags);
 int rdmap_write(struct rdmap_stream_context*, void* message, __u32 len, stag_t* stag, __u32 offset);
 int rdmap_read(struct rdmap_stream_context*, __u32 len, stag_t* src_stag, __u32 src_offset, stag_t* sink_stag, __u32 sink_offset);
+
+/**
+ * @brief adds buffer to ddp queue `0` to receive sends from remote
+ * 
+ * @param buf 
+ * @return int 
+ */
+int rdma_post_recv(struct rdmap_stream_context*, struct untagged_buffer* buf);
+
+int rdma_register(struct rdmap_stream_context*, struct tagged_buffer* buf);
+
 
 #endif
