@@ -4,9 +4,8 @@
 #include <stdlib.h>
 
 #include <linux/types.h>
-
+#include "common/iwarp.h"
 #include "blockingconcurrentqueue.h"
-#include "rdmap_structs.h"
 
 enum wc_status {
 	WC_SUCCESS,

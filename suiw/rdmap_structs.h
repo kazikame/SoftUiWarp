@@ -100,19 +100,6 @@ struct rdmap_terminate_hdr {
     __u32 ctrl_bits;
 };
 
-
-/* RFC 5040 */
-enum rdmap_opcode {
-    WRITE = 0,
-    READ_REQUEST = 1,
-    READ_RESPONSE = 2,
-    SEND = 3,
-    SEND_INVALIDATE = 4,
-    SEND_SOLICIT = 5,
-    SEND_SOLICIT_INVALIDATE = 6,
-    TERMINATE = 7,
-};
-
 static inline __u8 get_rdmap_op(__u8 bits)
 {
     return bits & 0xF;
