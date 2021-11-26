@@ -43,12 +43,13 @@ struct cq* create_cq(struct rdmap_stream_context* ctx, int num_cqe) {
 
     cq->ctx = ctx;
     cq->q = new moodycamel::ConcurrentQueue<work_completion>(num_cqe);
-
+    cq->pending_q = new moodycamel::ConcurrentQueue<work_completion>(num_cqe);
     return cq;
 }
 
 int destroy_cq(struct cq* cq) {
     delete cq->q;
+    delete cq->pending_q;
     free(cq);
     return 0;
 }

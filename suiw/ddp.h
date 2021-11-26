@@ -134,7 +134,7 @@ int ddp_send_untagged(struct ddp_stream_context*, struct ddp_untagged_meta*, sge
  * @param qn queue number in which the buffer is added
  * @param buf buffer
  */
-void ddp_post_recv(struct ddp_stream_context*, int qn, struct untagged_buffer* buf);
+void ddp_post_recv(struct ddp_stream_context*, int qn, struct untagged_buffer* buf, int num_bufs);
 inline struct untagged_buffer_queue* ddp_check_untagged_hdr(struct ddp_stream_context* ctx, struct ddp_tagged_meta* hdr);
 
 /**

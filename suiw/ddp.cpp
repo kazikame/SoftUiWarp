@@ -164,7 +164,7 @@ int ddp_send_untagged(struct ddp_stream_context* ctx, struct ddp_untagged_meta* 
     }
 }
 
-void ddp_post_recv(struct ddp_stream_context* ctx, int qn, struct untagged_buffer* buf)
+void ddp_post_recv(struct ddp_stream_context* ctx, int qn, struct untagged_buffer* bufs, int num_bufs)
 {
     if (qn < 0 || qn >= MAX_UNTAGGED_BUFFERS)
     {
@@ -172,7 +172,7 @@ void ddp_post_recv(struct ddp_stream_context* ctx, int qn, struct untagged_buffe
         return;
     } 
 
-    ctx->queues[qn].q->enqueue(*buf);
+    ctx->queues[qn].q->enqueue_bulk(bufs, num_bufs);
 }
 struct untagged_buffer_queue* ddp_check_untagged_hdr(struct ddp_stream_context* ctx, struct ddp_untagged_meta* hdr)
 {

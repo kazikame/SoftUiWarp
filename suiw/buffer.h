@@ -47,7 +47,7 @@
 
 struct untagged_buffer {
     char* data;
-    int len;
+    uint32_t len;
 };
 
 struct untagged_buffer_queue {

@@ -128,6 +128,8 @@ struct work_completion {
 		__be32		imm_data;
 		uint32_t	invalidated_rkey;
 	};
+
+	//! Ignored for now
 	uint32_t		qp_num;
 	uint32_t		src_qp;
 
@@ -146,6 +148,9 @@ struct work_completion {
 struct cq {
     struct rdmap_stream_context* ctx;
     moodycamel::ConcurrentQueue<work_completion>* q;
+
+	//! Maintains future work completions for pending read requests
+    moodycamel::ConcurrentQueue<work_completion>* pending_q;
 };
 
 struct cq* create_cq(struct rdmap_stream_context* ctx, int num_cqe);
@@ -182,7 +187,10 @@ enum wq_type {
 //! Receive Work request is only for send response packets
 struct recv_wr {
 	uint64_t		wr_id;
-	struct recv_wr     *next;
+
+	//! Using moodycamel queues here
+	// struct recv_wr     *next;
+	
 	struct sge	       *sg_list;
 	int			num_sge;
 };

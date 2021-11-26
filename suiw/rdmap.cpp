@@ -44,15 +44,24 @@
 #include <arpa/inet.h>
 
 //! Main receive loop run in a separate thread
+//! TODO:
 void* rnic_recv(void* ctx_ptr)
 {
     struct rdmap_stream_context* ctx = (struct rdmap_stream_context*)ctx_ptr;
     struct ddp_message ddp_message;
     struct rdmap_message message;
+
+    moodycamel::ConcurrentQueue<recv_wr>* rq = ctx->recv_q->recv_q;
+    moodycamel::ConcurrentQueue<work_completion>* recv_cq = ctx->recv_q->cq->q;
+    moodycamel::ConcurrentQueue<work_completion>* cq = ctx->send_q->cq->q;
+    moodycamel::ConcurrentQueue<work_completion>* pending_cq = ctx->send_q->cq->pending_q;
+
+    struct work_completion wce;
+
     while(ctx->connected)
     {
         int ret = ddp_recv(ctx->ddp_ctx, &ddp_message);
-        if (ret < 0)
+        if (unlikely(ret < 0))
         {
             lwlog_err("ddp_recv error, exiting");
             return NULL;
@@ -63,30 +72,45 @@ void* rnic_recv(void* ctx_ptr)
         {
             case rdma_opcode::RDMAP_RDMA_WRITE: {
                 assert(ddp_is_tagged(ddp_message.hdr.bits));
+                lwlog_info("Someone wrote data at %p", ddp_message.tag_buf->data);
+                //! do nothing :)
                 break;
             }
             case rdma_opcode::RDMAP_RDMA_READ_REQ: {
                 assert(!ddp_is_tagged(ddp_message.hdr.bits));
+                // handle w/o letting the app know
                 break;
             }
             case rdma_opcode::RDMAP_RDMA_READ_RESP: {
                 assert(ddp_is_tagged(ddp_message.hdr.bits));
-                break;
-            }
-            case rdma_opcode::RDMAP_SEND: {
-                assert(!ddp_is_tagged(ddp_message.hdr.bits));
-                break;
-            }
-            case rdma_opcode::RDMAP_SEND_INVAL: {
-                assert(!ddp_is_tagged(ddp_message.hdr.bits));
-                break;
-            }
-            case rdma_opcode::RDMAP_SEND_SE: {
-                assert(!ddp_is_tagged(ddp_message.hdr.bits));
+                // send wce from pending
+                int found = pending_cq->try_dequeue(wce);
+                if (unlikely(!found))
+                {
+                    lwlog_err("read response received but pending_cq is empty");
+                    break;
+                }
+
+                //! Check if wce matches with work that was done
+                wce.byte_len = ret;
+                cq->enqueue(wce);
                 break;
             }
             case rdma_opcode::RDMAP_SEND_SE_INVAL: {
                 assert(!ddp_is_tagged(ddp_message.hdr.bits));
+
+                //! fallover to SEND
+            }
+            case rdma_opcode::RDMAP_SEND_INVAL: {
+                assert(!ddp_is_tagged(ddp_message.hdr.bits));
+                //! TODO: Handle Invalidation
+                //! fallover to SEND
+            }
+            case rdma_opcode::RDMAP_SEND_SE: //! fallover to SEND
+            case rdma_opcode::RDMAP_SEND: {
+                assert(!ddp_is_tagged(ddp_message.hdr.bits));
+
+                //! TODO: Handle Gather
                 break;
             }
             case rdma_opcode::RDMAP_TERMINATE: {
@@ -100,6 +124,7 @@ void* rnic_recv(void* ctx_ptr)
     return NULL;
 }
 
+//! TODO: Add terminate
 /* Main RNIC Send loop */
 void* rnic_send(void* ctx_ptr)
 {
@@ -107,7 +132,9 @@ void* rnic_send(void* ctx_ptr)
     assert(ctx->send_q->wq_type == WQT_SQ);
     moodycamel::ConcurrentQueue<send_wr>* q = ctx->send_q->send_q;
     moodycamel::ConcurrentQueue<work_completion>* cq = ctx->send_q->cq->q;
-    send_wr req;
+    moodycamel::ConcurrentQueue<work_completion>* pending_cq = ctx->send_q->cq->pending_q;
+
+    struct send_wr req;
 
     __u8 rdma_hdr = 1 << 6;
     struct work_completion wce;
@@ -135,13 +162,13 @@ void* rnic_send(void* ctx_ptr)
                 send_wr_to_wce(&req, &wce);
                 wce.byte_len = ret;
                 //! Notify completion queue
-                if (ret < 0)
+                if (unlikely(ret < 0))
                 {
-                    wce.status = WC_SUCCESS;
+                    wce.status = WC_FATAL_ERR;
                 }
                 else 
                 {
-                    wce.status = WC_FATAL_ERR;
+                    wce.status = WC_SUCCESS;
                 }
                 cq->enqueue(wce);
                 break;
@@ -160,13 +187,13 @@ void* rnic_send(void* ctx_ptr)
                 send_wr_to_wce(&req, &wce);
                 wce.byte_len = ret;
                 //! Notify completion queue
-                if (ret < 0)
+                if (unlikely(ret < 0))
                 {
-                    wce.status = WC_SUCCESS;
+                    wce.status = WC_FATAL_ERR;
                 }
                 else 
                 {
-                    wce.status = WC_FATAL_ERR;
+                    wce.status = WC_SUCCESS;
                 }
                 cq->enqueue(wce);
                 break;
@@ -197,15 +224,18 @@ void* rnic_send(void* ctx_ptr)
                 send_wr_to_wce(&req, &wce);
                 wce.byte_len = ret;
                 //! Notify completion queue
-                if (ret < 0)
+                if (unlikely(ret < 0))
                 {
-                    wce.status = WC_SUCCESS;
+                    wce.status = WC_FATAL_ERR;
+                    cq->enqueue(wce);
                 }
                 else 
                 {
-                    wce.status = WC_FATAL_ERR;
+                    wce.status = WC_SUCCESS;
+                    //! Must be enqueued in `pending`
+                    //! Shifted from `pending` to `cq` when read response is received
+                    pending_cq->enqueue(wce);
                 }
-                cq->enqueue(wce);
                 break;
             }
 	        case rdma_opcode::RDMAP_RDMA_WRITE: {
@@ -218,13 +248,13 @@ void* rnic_send(void* ctx_ptr)
                 send_wr_to_wce(&req, &wce);
                 wce.byte_len = ret;
                 //! Notify completion queue
-                if (ret < 0)
+                if (unlikely(ret < 0))
                 {
-                    wce.status = WC_SUCCESS;
+                    wce.status = WC_FATAL_ERR;
                 }
                 else 
                 {
-                    wce.status = WC_FATAL_ERR;
+                    wce.status = WC_SUCCESS;
                 }
                 cq->enqueue(wce);
                 break;
@@ -258,7 +288,7 @@ struct rdmap_stream_context* rdmap_init_stream(struct rdmap_stream_init_attr* at
         struct untagged_buffer buf;
         buf.data = (char*) malloc(sizeof(struct rdmap_read_req_fields));
         buf.len = sizeof(struct rdmap_read_req_fields);
-        ddp_post_recv(ctx->ddp_ctx, READ_QN, &buf);
+        ddp_post_recv(ctx->ddp_ctx, READ_QN, &buf, 1);
     }
 
     //! Receive Thread
@@ -314,7 +344,32 @@ int rdmap_read(struct rdmap_stream_context* ctx, struct send_wr&& wr)
     return ctx->send_q->send_q->enqueue(std::move(wr));
 }
 
-int rdma_post_recv(struct rdmap_stream_context*, struct untagged_buffer* buf)
+/**
+ * @brief struct recv_wr {
+	uint64_t		wr_id;
+	struct recv_wr     *next;
+	struct sge	       *sg_list;
+	int			num_sge;
+};
+ * 
+ * @param ctx 
+ * @param buf 
+ * @return int 
+ */
+int rdma_post_recv(struct rdmap_stream_context* ctx, struct recv_wr&& wr)
 {
-    return -1;
+    //! Add to untagged buffer
+    struct untagged_buffer buf[wr.num_sge];
+    for (int i = 0; i < wr.num_sge; i++)
+    {
+        buf[i].data = (char *)wr.sg_list[i].addr;
+        buf[i].len = wr.sg_list[i].length;
+    }
+
+    ddp_post_recv(ctx->ddp_ctx, SEND_QN, buf, wr.num_sge);
+
+    //! Add to queue
+    ctx->recv_q->recv_q->enqueue(std::move(wr));
+
+    return 0;
 }
