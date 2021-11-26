@@ -40,7 +40,7 @@
 #define _RDMAP_H
 
 #include "buffer.h"
-#include "ddp_new.h"
+#include "ddp.h"
 #include "rdmap_structs.h"
 #include "common/iwarp.h"
 

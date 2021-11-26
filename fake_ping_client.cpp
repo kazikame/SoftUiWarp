@@ -13,7 +13,7 @@
 
 #include "common/iwarp.h"
 #include "mpa/mpa.h"
-#include "suiw/ddp_new.h"
+#include "suiw/ddp.h"
 #include "suiw/rdmap.h"
 #include "lwlog.h"
 
@@ -181,7 +181,7 @@ int main(int argc, char **argv)
     req.num_sge = 1;
     req.opcode = RDMAP_SEND;
 
-    lwlog_info("Sending RDMAP: %lld %lld %lld", d.offset, d.stag, d.size);
+    lwlog_info("Sending RDMAP: %lld %u %u", d.offset, d.stag, d.size);
     rdmap_send(ctx, std::move(req));
 
     sleep(10);

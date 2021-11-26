@@ -15,7 +15,7 @@ add_subdirectory(libsuiw)
 add_subdirectory(libibverbs)
 add_subdirectory(librdmacm)
 
-add_library (SoftUiWarp mpa/mpa.cpp common/iwarp.cpp mpa/mpa.cpp suiw/ddp_new.cpp suiw/rdmap.cpp suiw/cq.cpp)
+add_library (SoftUiWarp mpa/mpa.cpp common/iwarp.cpp mpa/mpa.cpp suiw/ddp.cpp suiw/rdmap.cpp suiw/cq.cpp)
 target_include_directories (SoftUiWarp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
