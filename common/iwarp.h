@@ -39,7 +39,7 @@
 
 #ifndef _IWARP_H
 #define _IWARP_H
-
+#include <stdint.h>
 #include <linux/types.h>
 #include <asm/byteorder.h>
 

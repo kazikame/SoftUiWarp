@@ -112,7 +112,7 @@ int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint64_t
             buf[DDP_TAGGED_HDR_SIZE+i] = datac[i];
         }
         offset = offset + data_size;
-        mpa_send(ctx->sockfd, buf, DDP_TAGGED_HDR_SIZE+data_size, 1);
+        //mpa_send(ctx->sockfd, buf, DDP_TAGGED_HDR_SIZE+data_size, 1);
     }
 }
 
@@ -145,7 +145,7 @@ int ddp_untagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, void* 
             buf[DDP_UNTAGGED_HDR_SIZE+i] = datac[i];
         }
         offset = offset + data_size;
-        mpa_send(ctx->sockfd, buf, DDP_UNTAGGED_HDR_SIZE+data_size, 1);
+        //mpa_send(ctx->sockfd, buf, DDP_UNTAGGED_HDR_SIZE+data_size, 1);
     }
 }
 
