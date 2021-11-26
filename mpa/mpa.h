@@ -93,7 +93,7 @@ int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_re
  * @param flags 
  * @return int 
  */
-int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags);
+int mpa_send(int sockfd, sge* sg_list, int num_sge, int flags);
 
 /**
  * @brief receives an MPA packet

@@ -413,4 +413,12 @@ enum rdmap_opcode {
     TERMINATE = 7,
 };
 
+//! TODO: Currently we only support a SINGLE sge per recv/send wr
+//!       Fix this.
+struct sge {
+	uint64_t		addr;
+	uint32_t		length;
+	uint32_t		lkey;
+};
+
 #endif
