@@ -56,8 +56,19 @@ void* rnic_recv(void* ctx_ptr)
     moodycamel::ConcurrentQueue<work_completion>* cq = ctx->send_q->cq->q;
     moodycamel::ConcurrentQueue<work_completion>* pending_cq = ctx->send_q->cq->pending_q;
 
+    struct recv_wr wr;
     struct work_completion wce;
+    
+    //! Only for read responses
+    moodycamel::ConcurrentQueue<send_wr>* sq = ctx->send_q->send_q;
+    struct send_wr read_resp;
+    struct sge sg;
+    struct rdmap_read_req_fields* read_req;
 
+    read_resp.opcode = rdma_opcode::RDMAP_RDMA_READ_RESP;
+    read_resp.wr_id = 1001;
+    read_resp.sg_list = &sg;
+    read_resp.num_sge = 1;
     while(ctx->connected)
     {
         int ret = ddp_recv(ctx->ddp_ctx, &ddp_message);
@@ -67,8 +78,8 @@ void* rnic_recv(void* ctx_ptr)
             return NULL;
         }
         message.ctrl = (rdmap_ctrl*)((char *)&ddp_message.hdr + DDP_CTRL_SIZE);
-        
-        switch(get_rdmap_op(message.ctrl->bits))
+        __u8 opcode = get_rdmap_op(message.ctrl->bits);
+        switch(opcode)
         {
             case rdma_opcode::RDMAP_RDMA_WRITE: {
                 assert(ddp_is_tagged(ddp_message.hdr.bits));
@@ -78,7 +89,27 @@ void* rnic_recv(void* ctx_ptr)
             }
             case rdma_opcode::RDMAP_RDMA_READ_REQ: {
                 assert(!ddp_is_tagged(ddp_message.hdr.bits));
-                // handle w/o letting the app know
+                // handle w/o letting the client know
+                read_req = (struct rdmap_read_req_fields*) ddp_message.untag_buf->data;
+
+                //! Get the corresponding tagged buffer
+                auto it = ctx->ddp_ctx->tagged_buffers.find(read_req->src_tag);
+                if (unlikely(it == ctx->ddp_ctx->tagged_buffers.end()))
+                {
+                    lwlog_err("Read request for stag %u not found", read_req->src_tag);
+                }
+                sg.addr = read_req->src_TO;
+                sg.lkey = read_req->src_tag;
+                sg.length = read_req->rdma_rd_sz;
+
+                read_resp.wr.rdma.rkey = read_req->sink_tag;
+                read_resp.wr.rdma.remote_addr = read_req->sink_TO;
+                
+                sq->enqueue(read_resp);
+                read_resp.wr_id++;
+
+                //! Replenish untagged buffer in queue 1
+                ddp_post_recv(ctx->ddp_ctx, READ_QN, ddp_message.untag_buf, 1);
                 break;
             }
             case rdma_opcode::RDMAP_RDMA_READ_RESP: {
@@ -96,21 +127,33 @@ void* rnic_recv(void* ctx_ptr)
                 cq->enqueue(wce);
                 break;
             }
-            case rdma_opcode::RDMAP_SEND_SE_INVAL: {
-                assert(!ddp_is_tagged(ddp_message.hdr.bits));
-
-                //! fallover to SEND
-            }
+            case rdma_opcode::RDMAP_SEND_SE_INVAL:
             case rdma_opcode::RDMAP_SEND_INVAL: {
-                assert(!ddp_is_tagged(ddp_message.hdr.bits));
                 //! TODO: Handle Invalidation
+                struct stag_t stag;
+                stag.tag = ntohl(ddp_message.tagged_metadata.rsvdULP1);
+                int erased = rdma_invalidate(ctx, &stag);
+                if (erased <= 0)
+                {
+                    lwlog_err("Invalid STag in send w/ invalidate; terminating");
+                    return NULL;
+                }
                 //! fallover to SEND
             }
             case rdma_opcode::RDMAP_SEND_SE: //! fallover to SEND
             case rdma_opcode::RDMAP_SEND: {
                 assert(!ddp_is_tagged(ddp_message.hdr.bits));
-
-                //! TODO: Handle Gather
+                int found = rq->try_dequeue(wr);
+                if (unlikely(!found))
+                {
+                    lwlog_err("no entry in receive request queue");
+                    break;
+                }
+                wce.opcode = (enum wc_opcode) opcode;
+                wce.byte_len = ret;
+                wce.status = WC_SUCCESS;
+                wce.wr_id = wr.wr_id;
+                cq->enqueue(wce);
                 break;
             }
             case rdma_opcode::RDMAP_TERMINATE: {
@@ -250,6 +293,7 @@ void* rnic_send(void* ctx_ptr)
                 //! Notify completion queue
                 if (unlikely(ret < 0))
                 {
+                    lwlog_err("Write Request %lu failed", req.wr_id);
                     wce.status = WC_FATAL_ERR;
                 }
                 else 
@@ -257,6 +301,20 @@ void* rnic_send(void* ctx_ptr)
                     wce.status = WC_SUCCESS;
                 }
                 cq->enqueue(wce);
+                break;
+            }
+            case rdma_opcode::RDMAP_RDMA_READ_RESP: {
+                //! This is from a read request, and NOT from the user
+                struct ddp_tagged_meta ddp_hdr;
+                ddp_hdr.rsvdULP1 = rdma_hdr;
+                ddp_hdr.tag = htonl(req.wr.rdma.rkey);
+                ddp_hdr.TO = htonll(req.wr.rdma.remote_addr);
+                int ret = ddp_send_tagged(ctx->ddp_ctx, &ddp_hdr, req.sg_list, req.num_sge);
+                if (unlikely(ret < 0))
+                {
+                    lwlog_err("Read Response for request %lu failed", req.wr_id);
+                }
+                //! No work completion to be generated
                 break;
             }
             default: {
@@ -345,12 +403,7 @@ int rdmap_read(struct rdmap_stream_context* ctx, struct send_wr&& wr)
 }
 
 /**
- * @brief struct recv_wr {
-	uint64_t		wr_id;
-	struct recv_wr     *next;
-	struct sge	       *sg_list;
-	int			num_sge;
-};
+ * @brief 
  * 
  * @param ctx 
  * @param buf 
@@ -372,4 +425,13 @@ int rdma_post_recv(struct rdmap_stream_context* ctx, struct recv_wr&& wr)
     ctx->recv_q->recv_q->enqueue(std::move(wr));
 
     return 0;
+}
+
+int rdma_register(struct rdmap_stream_context* ctx, struct tagged_buffer* buf)
+{
+    return register_tagged_buffer(ctx->ddp_ctx, buf);
+}
+int rdma_invalidate(struct rdmap_stream_context* ctx, struct stag_t* stag)
+{
+    return deregister_tagged_buffer(ctx->ddp_ctx, stag);
 }

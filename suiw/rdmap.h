@@ -135,7 +135,7 @@ int rdmap_read(struct rdmap_stream_context* ctx, struct send_wr&& wr);
 int rdma_post_recv(struct rdmap_stream_context*, struct untagged_buffer* buf);
 
 int rdma_register(struct rdmap_stream_context*, struct tagged_buffer* buf);
-
+int rdma_invalidate(struct rdmap_stream_context*, struct stag_t* stag);
 
 //! Printers
 void print_rdma_message(struct rdma_message* message, char* buf);

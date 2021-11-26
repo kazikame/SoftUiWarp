@@ -156,7 +156,7 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg);
  * @return int 
  */
 int register_tagged_buffer(struct ddp_stream_context*, struct tagged_buffer*);
-void deregister_tagged_buffer(struct ddp_stream_context*, struct stag_t*);
+int deregister_tagged_buffer(struct ddp_stream_context*, struct stag_t*);
 
 /**
  * @brief checks if the stag and offset are valid wrt to `ctx`

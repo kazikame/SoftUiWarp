@@ -199,6 +199,7 @@ struct untagged_buffer_queue* ddp_check_untagged_hdr(struct ddp_stream_context* 
 }
 
 //! TODO: receive should timeout after a certain threshold
+//! TODO: support gather receives
 int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
 {
     int ddp_payload_len = 0;
@@ -341,9 +342,10 @@ int register_tagged_buffer(struct ddp_stream_context* ctx, struct tagged_buffer*
     return 0;
 }
 
-void deregister_tagged_buffer(struct ddp_stream_context* ctx, struct stag_t* stag)
+int deregister_tagged_buffer(struct ddp_stream_context* ctx, struct stag_t* stag)
 {
-    ctx->tagged_buffers.erase(stag->tag);
+    int ret = ctx->tagged_buffers.erase(stag->tag);
+    return ret;
 }
 
 //! C++ function, bad
