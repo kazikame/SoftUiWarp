@@ -84,6 +84,7 @@ void* rnic_send(void* ctx_ptr)
         {
             case rdma_opcode::RDMAP_SEND_SE:
         	case rdma_opcode::RDMAP_SEND: {
+                lwlog_info("Sending RDMAP Send Message");
                 struct ddp_untagged_meta ddp_hdr;
                 static __u32 msn = 1;
 

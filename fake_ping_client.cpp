@@ -93,6 +93,12 @@ int create_tcp_connection(struct Config* config)
     return sockfd;
 }
 
+struct send_data {
+    __u64 offset;
+    __u32 stag;
+    __u32 size;
+};
+
 int main(int argc, char **argv)
 {
     //! TODO: Use a better argparse library
@@ -141,7 +147,7 @@ int main(int argc, char **argv)
     rq->context = ctx;
 
     //! Create Tagged Buffer for read
-    char buf[1000];
+    char buf[] = "rdma-ping-0: ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqr";
     tagged_buffer tg_buf;
     tg_buf.data = buf;
     tg_buf.len = 1000;
@@ -157,6 +163,26 @@ int main(int argc, char **argv)
         close(sockfd);
     }
 
-    
-    sleep(2);
+    //! Make Send Work Request
+    struct send_wr req;
+    req.wr_id = 1;
+
+    //! Make Scatter/Gather req
+    struct send_data d;
+    d.offset = htonll((uint64_t)buf);
+    d.stag = htonl(stag);
+    d.size = htonl(sizeof(buf));
+
+    struct sge sg;
+    sg.addr = (uint64_t)&d;
+    sg.length = sizeof(d);
+
+    req.sg_list = &sg;
+    req.num_sge = 1;
+    req.opcode = RDMAP_SEND;
+
+    lwlog_info("Sending RDMAP: %lld %lld %lld", d.offset, d.stag, d.size);
+    rdmap_send(ctx, std::move(req));
+
+    sleep(10);
 }

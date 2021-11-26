@@ -218,7 +218,11 @@ int mpa_send(int sockfd, sge* sg_list, int num_sge, int flags)
         len += sg_list[i].length;
     }
 
-    if (len > EMSS) return -1;
+    if (len > EMSS) 
+    {
+        lwlog_err("Sending MPA packet larger than EMSS: %d", len);
+        return -1;
+    }
 
     //! MPA Header
     __be16 mpa_len = htons(len);

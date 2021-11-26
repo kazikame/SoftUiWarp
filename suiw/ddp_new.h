@@ -80,13 +80,13 @@ inline int ddp_is_tagged(__u8 bits)
     return DDP_HDR_T & bits;
 }
 
-struct ddp_tagged_meta {
+struct __attribute__((__packed__)) ddp_tagged_meta {
     __u8 rsvdULP1 = 0;
     __u32 tag;
     __u64 TO;
 };
 
-struct ddp_untagged_meta {
+struct __attribute__((__packed__)) ddp_untagged_meta {
     __u8 rsvdULP1 = 0;
     __u32 rsvdULP2;
     __u32 qn;

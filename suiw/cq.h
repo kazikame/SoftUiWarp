@@ -158,7 +158,7 @@ struct send_wr {
 	struct sge	       *sg_list;
 	int			num_sge;
 	enum rdma_opcode	opcode;
-	unsigned int		send_flags;
+	unsigned int		send_flags = 0;
 	/* When opcode is *_WITH_IMM: Immediate data in network byte order.
 	 * When opcode is *_INV: Stores the rkey to invalidate
 	 */

@@ -24,7 +24,7 @@ int ddp_send_tagged(struct ddp_stream_context* ctx, struct ddp_tagged_meta* next
 {
     struct ddp_hdr hdr;
     hdr.bits |= DDP_HDR_T;
-    hdr.bits |= 1;
+    hdr.bits |= __cpu_to_be16(1);
     
     struct ddp_tagged_meta hdr2;
     hdr2 = *next_hdr;
@@ -50,6 +50,11 @@ int ddp_send_tagged(struct ddp_stream_context* ctx, struct ddp_tagged_meta* next
         while (remaining_bytes > 0)
         {
             int packet_len = remaining_bytes > EMSS ? EMSS : remaining_bytes;
+
+            if (last_sge && packet_len == remaining_bytes)
+            {
+                hdr.bits |= DDP_FLAG_LAST;
+            }
             mpa_sge_list[sg_num].addr = (uint64_t) (sge_list[i].addr + (sge_list[i].length - remaining_bytes));
             mpa_sge_list[sg_num].length = packet_len;
             int ret = mpa_send(ctx->sockfd, mpa_sge_list, sg_num+1, 0);
@@ -68,8 +73,8 @@ int ddp_send_tagged(struct ddp_stream_context* ctx, struct ddp_tagged_meta* next
 //! TODO: This can be made more efficient by merging multiple sge into a single MPA packet
 int ddp_send_untagged(struct ddp_stream_context* ctx, struct ddp_untagged_meta* next_hdr, sge* sge_list, int num_sge)
 {
+    lwlog_info("Sending DDP Untagged Message");
     struct ddp_hdr hdr;
-    hdr.bits |= DDP_HDR_T;
     hdr.bits |= 1;
     
     struct ddp_untagged_meta hdr2;
@@ -88,7 +93,7 @@ int ddp_send_untagged(struct ddp_stream_context* ctx, struct ddp_untagged_meta* 
 
     for (int i = 0; i < num_sge; i++)
     {
-        int last_sge = i == num_sge;
+        int last_sge = i == (num_sge-1);
 
         //! Break each sge into MPA segments
         int remaining_bytes = sge_list[i].length;
@@ -96,12 +101,18 @@ int ddp_send_untagged(struct ddp_stream_context* ctx, struct ddp_untagged_meta* 
         while (remaining_bytes > 0)
         {
             int packet_len = remaining_bytes > EMSS ? EMSS : remaining_bytes;
+            
+            if (last_sge && packet_len == remaining_bytes)
+            {
+                hdr.bits |= DDP_FLAG_LAST;
+            }
+            
             mpa_sge_list[sg_num].addr = (uint64_t) (sge_list[i].addr + (sge_list[i].length - remaining_bytes));
             mpa_sge_list[sg_num].length = packet_len;
             int ret = mpa_send(ctx->sockfd, mpa_sge_list, sg_num+1, 0);
             if (ret < 0)
             {
-                lwlog_err("send failed");
+                lwlog_err("send failed: %d", ret);
                 return ret;
             }
             //! Increase offset
