@@ -52,6 +52,7 @@ struct untagged_buffer {
 
 struct untagged_buffer_queue {
     moodycamel::ConcurrentQueue<struct untagged_buffer> q;
+    int msn = 1;
 };
 
 struct pd_t {

@@ -41,6 +41,7 @@
 #include <stdlib.h>
 #include "lwlog.h"
 #include "buffer.h"
+#include "common/iwarp.h"
 #include <linux/types.h>
 #include <asm/byteorder.h>
 
@@ -55,11 +56,11 @@ struct ddp_stream_context {
     struct pd_t* pd;
 
     untagged_buffer_queue* queues;
-    std::unordered_map<__u32, tagged_buffer*> tagged_buffers;
+    std::unordered_map<__u32, tagged_buffer> tagged_buffers;
 };
 
 struct ddp_hdr {
-    __u8 bits;
+    __u8 bits = 0;
 };
 
 enum {
@@ -69,6 +70,10 @@ enum {
     DDP_HDR_RSVD = 0xF << 2,
     DDP_HDR_DV = 0x3,
 };
+
+inline __u8 ddp_set_tagged(__u8 bits) {
+    return bits;
+}
 
 inline int ddp_is_tagged(__u8 bits)
 {
@@ -86,7 +91,7 @@ struct ddp_untagged_meta {
     __u32 rsvdULP2;
     __u32 qn;
     __u32 msn;
-    __u32 mo;
+    __u32 mo = 0;
 };
 
 struct ddp_message {
@@ -100,14 +105,6 @@ struct ddp_message {
         struct tagged_buffer* tag_buf;
     };
     int len;
-};
-
-//! TODO: Currently we only support a SINGLE sge per recv/send wr
-//!       Fix this.
-struct sge {
-	uint64_t		addr;
-	uint32_t		length;
-	uint32_t		lkey;
 };
 
 /**

@@ -204,6 +204,15 @@ struct rdmap_stream_context* rdmap_init_stream(struct rdmap_stream_init_attr* at
     ctx->recv_q = attr->recv_q;
     ctx->connected = 1;
 
+    //! Init Read Untagged Buffers
+    for (int i = 0; i < attr->max_pending_read_requests; i++)
+    {
+        struct untagged_buffer buf;
+        buf.data = (char*) malloc(sizeof(struct rdmap_read_req_fields));
+        buf.len = sizeof(struct rdmap_read_req_fields);
+        ddp_post_recv(ctx->ddp_ctx, READ_QN, &buf);
+    }
+
     //! Receive Thread
     int ret = pthread_create(&ctx->recv_thread, NULL, rnic_recv, ctx);
     if (ret != 0)
@@ -230,14 +239,16 @@ void rdmap_kill_stream(struct rdmap_stream_context* ctx) {
 
     pthread_join(ctx->recv_thread, NULL);
     pthread_join(ctx->send_thread, NULL);
+
+    //! TODO: Free read request buffers
 }
 
 //! Not overriding tagged buffer registration functions
 //! Use rdmap_stream_context->ddp_ctx for those
 
 
-int rdmap_send(struct rdmap_stream_context*, void* message, __u32 len, stag_t* invalidate_stag, int flags);
-int rdmap_write(struct rdmap_stream_context*, void* message, __u32 len, stag_t* stag, __u32 offset);
-int rdmap_read(struct rdmap_stream_context*, __u32 len, stag_t* src_stag, __u32 src_offset, stag_t* sink_stag, __u32 sink_offset);
+int rdmap_send(struct rdmap_stream_context*, struct send_wr* wr);
+int rdmap_write(struct rdmap_stream_context*, struct send_wr* wr);
+int rdmap_read(struct rdmap_stream_context*, struct send_wr* wr);
 
 int rdma_post_recv(struct rdmap_stream_context*, struct untagged_buffer* buf);

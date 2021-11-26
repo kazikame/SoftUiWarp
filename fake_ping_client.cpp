@@ -13,7 +13,7 @@
 
 #include "common/iwarp.h"
 #include "mpa/mpa.h"
-#include "suiw/ddp.h"
+// #include "suiw/ddp.h"
 
 #include "lwlog.h"
 
@@ -115,7 +115,7 @@ int main(int argc, char **argv)
         close(sockfd);
     }
     sleep(2);
-    std::cout<<"dfdg\n";
+    // std::cout<<"dfdg\n";
     //! Send some stuff
     //int garbage = 5;
     //ret = mpa_send(sockfd, &garbage, sizeof(int), 0);
@@ -130,30 +130,30 @@ int main(int argc, char **argv)
 
 	//	        lwlog_info("%s", info.ulpdu);
 	//sleep(10);
-    struct pd* pd1 = new pd;
-    pd1->pd_id = 12; 
-    std::cout<<"print\n";
-    struct ddp_stream_context* ctx = ddp_init_stream(sockfd, pd1);
-    std::cout<<"print 2\n";
-    struct stag_t* stag = new stag_t;
-    stag->pd_id = pd1;
-    stag->id = 1;
-    register_stag(stag);
-    std::cout<<"tag dd\n";
-    register_tagged_buffer();
-    //char data[10] = "Tswhat";
-    //for(int i = 0;i<10;i++){
-      //  data[i] = 't';
-    //}
-    printf("before send");
-    //struct ddp_stream_context* ctx, struct stag_t* tag, void* data, uint32_t len, 
-      //              uint64_t reserved, uint32_t qn, uint32_t msn)
-    ret = ddp_untagged_send(ctx, stag, data, 16, 287762808832, 0, 1);
-    printf("done\n");
-    char packet[1000] = "";
-    struct siw_mpa_packet info;
-    info.ulpdu = packet;
-    ret = mpa_recv(sockfd, &info, EMSS);
-    lwlog_info("%s",info.ulpdu);
-    sleep(10);
+    // struct pd* pd1 = new pd;
+    // pd1->pd_id = 12; 
+    // std::cout<<"print\n";
+    // struct ddp_stream_context* ctx = ddp_init_stream(sockfd, pd1);
+    // std::cout<<"print 2\n";
+    // struct stag_t* stag = new stag_t;
+    // stag->pd_id = pd1;
+    // stag->id = 1;
+    // register_stag(stag);
+    // std::cout<<"tag dd\n";
+    // register_tagged_buffer();
+    // //char data[10] = "Tswhat";
+    // //for(int i = 0;i<10;i++){
+    //   //  data[i] = 't';
+    // //}
+    // printf("before send");
+    // //struct ddp_stream_context* ctx, struct stag_t* tag, void* data, uint32_t len, 
+    //   //              uint64_t reserved, uint32_t qn, uint32_t msn)
+    // ret = ddp_untagged_send(ctx, stag, data, 16, 287762808832, 0, 1);
+    // printf("done\n");
+    // char packet[1000] = "";
+    // struct siw_mpa_packet info;
+    // info.ulpdu = packet;
+    // ret = mpa_recv(sockfd, &info, EMSS);
+    // lwlog_info("%s",info.ulpdu);
+    // sleep(10);
 }

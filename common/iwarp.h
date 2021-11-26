@@ -41,6 +41,7 @@
 #define _IWARP_H
 
 #include <linux/types.h>
+#include <stdint.h>
 #include <asm/byteorder.h>
 
 
@@ -411,6 +412,12 @@ enum rdmap_opcode {
     SEND_SOLICIT = 5,
     SEND_SOLICIT_INVALIDATE = 6,
     TERMINATE = 7,
+};
+
+struct sge {
+	uint64_t		addr;
+	uint32_t		length;
+	uint32_t		lkey;
 };
 
 #endif

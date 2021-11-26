@@ -82,18 +82,7 @@ int mpa_recv_rr(int sockfd, struct siw_mpa_info* info);
  */
 int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_recv);
 
-/**
- * @brief sends an MPA packet
- * 
- * ulpdu size must be in bytes.
- * 
- * @param sockfd TCP socket connection
- * @param ulpdu MPA packet payload
- * @param len MPA packet payload length. Must fit in 2 octets.
- * @param flags 
- * @return int 
- */
-int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags);
+int mpa_send(int sockfd, sge* sg_list, int num_sge, int flags);
 
 /**
  * @brief receives an MPA packet

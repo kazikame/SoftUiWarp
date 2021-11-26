@@ -122,6 +122,8 @@ struct rdmap_stream_init_attr {
     
     struct wq* send_q;
     struct wq* recv_q;
+
+    int max_pending_read_requests;
 };
 
 #endif

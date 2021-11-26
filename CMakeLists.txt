@@ -11,12 +11,13 @@ set (IWARP_INCLUDE_DIR "${IWARP_DIR}/include")
 set (IWARP_LIB_DIR "${IWARP_DIR}/lib")
 
 # Add libraries to compile.
-add_subdirectory (libsuiw)
-add_subdirectory (libibverbs)
-add_subdirectory (librdmacm)
+add_subdirectory(libsuiw)
+add_subdirectory(libibverbs)
+add_subdirectory(librdmacm)
 
-add_library (SoftUiWarp suiw/ddp.cpp mpa/mpa.cpp common/iwarp.cpp suiw/rdmap.cpp)
+add_library (SoftUiWarp mpa/mpa.cpp common/iwarp.cpp mpa/mpa.cpp suiw/ddp_new.cpp suiw/rdmap.cpp)
 target_include_directories (SoftUiWarp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable (fake_ping_client fake_ping_client.cpp)
 target_link_libraries (fake_ping_client LINK_PRIVATE SoftUiWarp)
+target_link_libraries (fake_ping_client LINK_PRIVATE suiw)
