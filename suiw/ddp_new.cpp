@@ -122,7 +122,10 @@ void ddp_post_recv(struct ddp_stream_context* ctx, int qn, struct untagged_buffe
     ctx->queues[qn].q.enqueue(*buf);
 }
 
-int ddp_recv(struct ddp_stream_context*, struct ddp_message*);
+int ddp_recv(struct ddp_stream_context*, struct ddp_message*)
+{
+    return -1;
+}
 
 int register_tagged_buffer(struct ddp_stream_context* ctx, struct tagged_buffer* buf) 
 {

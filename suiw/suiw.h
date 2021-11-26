@@ -433,12 +433,12 @@ struct siw_iwarp_rx {
 				more_ddp_segs:1,   /* more DDP segs expected */
 				rx_suspend:1,	   /* stop rcv DDP segs. */
 				unused:1,
-				prev_rdmap_opcode:4; /* opcode of prev msg */
+				prev_rdma_opcode:4; /* opcode of prev msg */
 	char			pad;		/* # of pad bytes expected */
 };
 
 #define siw_rx_data(qp, rctx)	\
-	(iwarp_pktinfo[__rdmap_opcode(&rctx->hdr.ctrl)].proc_data(qp, rctx))
+	(iwarp_pktinfo[__rdma_opcode(&rctx->hdr.ctrl)].proc_data(qp, rctx))
 
 /*
  * Shorthands for short packets w/o payload

@@ -133,19 +133,14 @@ struct ddp_message {
 
 //! TODO: Take hint from siw.h, and complete
 
-
-struct pd {
-    uint32_t pd_id;
-};
-
 struct ddp_stream_context {
     int sockfd;
-    struct pd* pd_id;
+    struct pd_t* pd_id;
 };
 
 struct stag_t {
     uint32_t id;
-    struct pd* pd_id;
+    struct pd_t* pd_id;
 };
 
 struct ddp_stream_context* ddp_init_stream(int sockfd, struct pd* pd_id);

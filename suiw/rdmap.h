@@ -122,9 +122,9 @@ void rdmap_kill_stream(struct rdmap_stream_context* ctx);
  * @return int 
  */
 
-int rdmap_send(struct rdmap_stream_context*, void* message, __u32 len, stag_t* invalidate_stag, int flags);
-int rdmap_write(struct rdmap_stream_context*, void* message, __u32 len, stag_t* stag, __u32 offset);
-int rdmap_read(struct rdmap_stream_context*, __u32 len, stag_t* src_stag, __u32 src_offset, stag_t* sink_stag, __u32 sink_offset);
+int rdmap_send(struct rdmap_stream_context* ctx, struct send_wr&& wr);
+int rdmap_write(struct rdmap_stream_context* ctx, struct send_wr&& wr);
+int rdmap_read(struct rdmap_stream_context* ctx, struct send_wr&& wr);
 
 /**
  * @brief adds buffer to ddp queue `0` to receive sends from remote

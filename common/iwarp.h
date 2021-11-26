@@ -168,7 +168,7 @@ static inline void __rdmap_set_version(struct iwarp_ctrl *ctrl, __u8 version)
 			| (__cpu_to_be16(version << 6) & RDMAP_MASK_VERSION);
 }
 
-static inline __u8 __rdmap_opcode(struct iwarp_ctrl *ctrl)
+static inline __u8 __rdma_opcode(struct iwarp_ctrl *ctrl)
 {
 	return (__u8)__be16_to_cpu(ctrl->ddp_rdmap_ctrl & RDMAP_MASK_OPCODE);
 }
@@ -364,6 +364,7 @@ enum llp_etype {
 	LLP_ETYPE_MPA	= 0x00
 };
 
+/* RFC 5040 */
 enum rdma_opcode {
 	RDMAP_RDMA_WRITE	= 0x0,
 	RDMAP_RDMA_READ_REQ	= 0x1,
@@ -402,17 +403,13 @@ struct siw_mpa_packet {
 	int bytes_rcvd = 0;
 };
 
-/* RFC 5040 */
-enum rdmap_opcode {
-    WRITE = 0,
-    READ_REQUEST = 1,
-    READ_RESPONSE = 2,
-    SEND = 3,
-    SEND_INVALIDATE = 4,
-    SEND_SOLICIT = 5,
-    SEND_SOLICIT_INVALIDATE = 6,
-    TERMINATE = 7,
-};
+#if __BIG_ENDIAN__
+# define htonll(x) (x)
+# define ntohll(x) (x)
+#else
+# define htonll(x) ((uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32)
+# define ntohll(x) ((uint64_t)ntohl((x) & 0xFFFFFFFF) << 32) | ntohl((x) >> 32)
+#endif
 
 struct sge {
 	uint64_t		addr;

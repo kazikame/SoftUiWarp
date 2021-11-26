@@ -2,6 +2,8 @@
 #include "rdmap.h"
 #include "ddp_new.h"
 #include "lwlog.h"
+#include "pthread.h"
+#include <arpa/inet.h>
 
 //! Main receive loop run in a separate thread
 void* rnic_recv(void* ctx_ptr)
@@ -21,35 +23,35 @@ void* rnic_recv(void* ctx_ptr)
         
         switch(get_rdmap_op(message.ctrl->bits))
         {
-            case rdmap_opcode::WRITE: {
+            case rdma_opcode::RDMAP_RDMA_WRITE: {
                 assert(ddp_is_tagged(ddp_message.hdr->bits));
                 break;
             }
-            case rdmap_opcode::READ_REQUEST: {
+            case rdma_opcode::RDMAP_RDMA_READ_REQ: {
                 assert(!ddp_is_tagged(ddp_message.hdr->bits));
                 break;
             }
-            case rdmap_opcode::READ_RESPONSE: {
+            case rdma_opcode::RDMAP_RDMA_READ_RESP: {
                 assert(ddp_is_tagged(ddp_message.hdr->bits));
                 break;
             }
-            case rdmap_opcode::SEND: {
+            case rdma_opcode::RDMAP_SEND: {
                 assert(!ddp_is_tagged(ddp_message.hdr->bits));
                 break;
             }
-            case rdmap_opcode::SEND_INVALIDATE: {
+            case rdma_opcode::RDMAP_SEND_INVAL: {
                 assert(!ddp_is_tagged(ddp_message.hdr->bits));
                 break;
             }
-            case rdmap_opcode::SEND_SOLICIT: {
+            case rdma_opcode::RDMAP_SEND_SE: {
                 assert(!ddp_is_tagged(ddp_message.hdr->bits));
                 break;
             }
-            case rdmap_opcode::SEND_SOLICIT_INVALIDATE: {
+            case rdma_opcode::RDMAP_SEND_SE_INVAL: {
                 assert(!ddp_is_tagged(ddp_message.hdr->bits));
                 break;
             }
-            case rdmap_opcode::TERMINATE: {
+            case rdma_opcode::RDMAP_TERMINATE: {
                 assert(!ddp_is_tagged(ddp_message.hdr->bits));
                 break;
             }
@@ -80,12 +82,15 @@ void* rnic_send(void* ctx_ptr)
         rdma_hdr = (1 << 6) | req.opcode;
         switch(req.opcode)
         {
-            case SEND_SOLICIT:
-        	case SEND: {
+            case rdma_opcode::RDMAP_SEND_SE:
+        	case rdma_opcode::RDMAP_SEND: {
                 struct ddp_untagged_meta ddp_hdr;
-                
+                static __u32 msn = 1;
+
                 ddp_hdr.rsvdULP1 = rdma_hdr;
-                ddp_hdr.qn = SEND_QN;
+                ddp_hdr.qn = htonl(SEND_QN);
+                ddp_hdr.msn = htonl(msn++);
+
                 int ret = ddp_send_untagged(ctx->ddp_ctx, &ddp_hdr, req.sg_list, req.num_sge);
                 
                 send_wr_to_wce(&req, &wce);
@@ -102,13 +107,15 @@ void* rnic_send(void* ctx_ptr)
                 cq->enqueue(wce);
                 break;
             }
-            case SEND_SOLICIT_INVALIDATE: 
-            case SEND_INVALIDATE: {
+            case rdma_opcode::RDMAP_SEND_SE_INVAL: 
+            case rdma_opcode::RDMAP_SEND_INVAL: {
                 struct ddp_untagged_meta ddp_hdr;
+                static __u32 msn = 1;
                 
                 ddp_hdr.rsvdULP1 = rdma_hdr;
-                ddp_hdr.rsvdULP2 = req.invalidate_rkey;
-                ddp_hdr.qn = SEND_QN;
+                ddp_hdr.rsvdULP2 = htonl(req.invalidate_rkey);
+                ddp_hdr.qn = htonl(SEND_QN);
+                ddp_hdr.msn = htonl(msn++);
                 int ret = ddp_send_untagged(ctx->ddp_ctx, &ddp_hdr, req.sg_list, req.num_sge);
                 
                 send_wr_to_wce(&req, &wce);
@@ -125,10 +132,12 @@ void* rnic_send(void* ctx_ptr)
                 cq->enqueue(wce);
                 break;
             }
-        	case READ_REQUEST: {
+        	case rdma_opcode::RDMAP_RDMA_READ_REQ: {
                 struct ddp_untagged_meta ddp_hdr;
+                static __u32 msn = 1;
                 ddp_hdr.rsvdULP1 = rdma_hdr;
-                ddp_hdr.qn = READ_QN;
+                ddp_hdr.qn = htonl(READ_QN);
+                ddp_hdr.msn = htonl(msn++);
                 if (req.num_sge != 1)
                 {
                     lwlog_err("Number of sge not 1 in read req (%d)", req.num_sge);
@@ -160,11 +169,11 @@ void* rnic_send(void* ctx_ptr)
                 cq->enqueue(wce);
                 break;
             }
-	        case WRITE: {
+	        case rdma_opcode::RDMAP_RDMA_WRITE: {
                 struct ddp_tagged_meta ddp_hdr;
                 ddp_hdr.rsvdULP1 = rdma_hdr;
-                ddp_hdr.tag = req.wr.rdma.rkey;
-                ddp_hdr.TO = req.wr.rdma.remote_addr;
+                ddp_hdr.tag = htonl(req.wr.rdma.rkey);
+                ddp_hdr.TO = htonll(req.wr.rdma.remote_addr);
                 int ret = ddp_send_tagged(ctx->ddp_ctx, &ddp_hdr, req.sg_list, req.num_sge);
                 
                 send_wr_to_wce(&req, &wce);
@@ -228,6 +237,8 @@ struct rdmap_stream_context* rdmap_init_stream(struct rdmap_stream_init_attr* at
         lwlog_err("Couldn't create send thread (%d)", ret);
         return NULL;
     }
+
+    return ctx;
 }
 
 //! Free ddp stream structures, kill threads, 
@@ -247,8 +258,24 @@ void rdmap_kill_stream(struct rdmap_stream_context* ctx) {
 //! Use rdmap_stream_context->ddp_ctx for those
 
 
-int rdmap_send(struct rdmap_stream_context*, struct send_wr* wr);
-int rdmap_write(struct rdmap_stream_context*, struct send_wr* wr);
-int rdmap_read(struct rdmap_stream_context*, struct send_wr* wr);
+int rdmap_send(struct rdmap_stream_context* ctx, struct send_wr&& wr)
+{
+    return ctx->send_q->send_q->enqueue(std::move(wr));
+}
 
-int rdma_post_recv(struct rdmap_stream_context*, struct untagged_buffer* buf);
+int rdmap_write(struct rdmap_stream_context* ctx, struct send_wr&& wr)
+{
+    assert(wr.opcode == rdma_opcode::RDMAP_RDMA_WRITE);
+    return ctx->send_q->send_q->enqueue(std::move(wr));
+}
+
+int rdmap_read(struct rdmap_stream_context* ctx, struct send_wr&& wr)
+{
+    assert(wr.opcode == rdma_opcode::RDMAP_RDMA_READ_REQ);
+    return ctx->send_q->send_q->enqueue(std::move(wr));
+}
+
+int rdma_post_recv(struct rdmap_stream_context*, struct untagged_buffer* buf)
+{
+    return -1;
+}
