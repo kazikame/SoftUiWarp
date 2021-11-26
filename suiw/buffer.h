@@ -54,18 +54,18 @@ struct untagged_buffer_queue {
     moodycamel::ConcurrentQueue<struct untagged_buffer> q;
 };
 
-struct pd_t {
+struct pd {
     __u32 pd_id;
 };
 
 struct stag_t {
     __u32 tag;
-    struct pd_t pd;
+    struct pd pd;
 };
 
 struct tagged_buffer {
     stag_t stag;
-    void* data;
+    char* data;
     int len;
     int access_ctrl = 0;
 };

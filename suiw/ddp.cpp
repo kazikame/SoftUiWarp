@@ -39,12 +39,12 @@ void ddp_kill_stream(struct ddp_stream_context* ddp_strem_ctx){
 }
 
 int register_stag(struct stag_t* tag){
-    tag_to_pd[tag->id] = (tag->pd_id)->pd_id;
-    return tag->id;
+    tag_to_pd[tag->tag] = (tag->pd).pd_id;
+    return tag->tag;
 }
 
 void register_tagged_buffer(stag_t* stag, void* pointer_to_memory, int len){
-    if(stag->id >= TAGGED_BUFFERS_NUM){
+    if(stag->tag >= TAGGED_BUFFERS_NUM){
         lwlog_err("stag greater than allocated tagged buffers");
         return;
     }
@@ -53,13 +53,13 @@ void register_tagged_buffer(stag_t* stag, void* pointer_to_memory, int len){
         return;
     }
     struct tagged_buffer* buf = (struct tagged_buffer*) malloc(sizeof(struct tagged_buffer));
-    buf->stag = stag->id;
+    buf->stag = *stag;
     if(pointer_to_memory == NULL){
         pointer_to_memory = (char*)malloc(len*sizeof(char));
     }
-    buf->data = pointer_to_memory;
+    buf->data = (char*)pointer_to_memory;
     buf->len = len;
-    stag_array[stag->id] = buf;
+    stag_array[stag->tag] = buf;
     return;
 }
 
@@ -77,8 +77,8 @@ void register_untagged_buffer(int qn, int queue_len){
         return;
     }
     struct untagged_buffer* buf = (struct untagged_buffer*) malloc(sizeof(struct untagged_buffer));
-    buf->data = (char*)malloc(len*sizeof(char));
-    buf->len = len;
+    buf->data = (char*)malloc(queue_len*sizeof(char));
+    buf->len = queue_len;
     qn_array[qn] = buf;
     return;
 }
@@ -104,7 +104,7 @@ int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, uint64_t
         char *buf = new char[DDP_TAGGED_HDR_SIZE+data_size];
         buf[0] = resv;
         buf[1] = rsrvdULP;
-	uint32_t tag_in = tag->pd_id->pd_id;
+	uint32_t tag_in = tag->pd.pd_id;
         buf[2] = tag_in >> 24; buf[3] = tag_in >> 16; buf[4] = tag_in >> 8; buf[5] = tag_in; 
         buf[6] = offset >> 56; buf[7] = offset >> 48; buf[8] = offset >> 40; buf[9] = offset >> 32;
         buf[10] = offset >> 24; buf[11] = offset >> 16; buf[12] = offset >> 8; buf[13] = offset;
@@ -170,7 +170,7 @@ int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_message* message)
     int data_size = 0;
     while(1){
         struct siw_mpa_packet* info = (struct siw_mpa_packet*) malloc(sizeof(struct siw_mpa_packet));
-        mpa_recv(ctx->sockfd, info, MUL_PDU);
+        mpa_recv(ctx->sockfd, info, MULPDU);
         num_packets++;
         int ptr = 0;
         message->hdr->tagged->reserved = info->ulpdu[ptr++]; //maybe need to put this in ddp_recv
@@ -194,11 +194,11 @@ int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_message* message)
         data_size += (info->ulpdu_len - DDP_TAGGED_HDR_SIZE);
         tagged_buffer* buf = stag_array[stag];
         if(num_packets == 1){
-            message->data = *buf->data[offset]; //pointer to offset at tag buffer
+            message->data = &buf->data[offset]; //pointer to offset at tag buffer
             message->tag_buf = buf;
         }
         while(ptr < info->ulpdu_len){
-            buf->data[offset++] =  info->ulpdu[ptr++];
+            buf->data[offset++] = info->ulpdu[ptr++];
         }
         if(message->hdr->tagged->reserved&64==1){ //last packet for this message
             message->len = data_size;
@@ -214,7 +214,7 @@ int ddp_untagged_recv(struct ddp_stream_context* ctx, struct ddp_message* messag
     int data_size = 0;
     while(1){
         struct siw_mpa_packet* info = (struct siw_mpa_packet*) malloc(sizeof(struct siw_mpa_packet));
-        mpa_recv(ctx->sockfd, info, MUL_PDU);
+        mpa_recv(ctx->sockfd, info, MULPDU);
         num_packets++;
         int ptr = 0;
         message->hdr->untagged->reserved = info->ulpdu[ptr++]; //maybe need to put this in ddp_recv

@@ -128,25 +128,25 @@ struct ddp_message {
         struct tagged_buffer* tag_buf;
     };
     int len; //length of the message
-    uint8_t; //type of message, tagged = 1, untagged = 0;
+    uint8_t type; //type of message, tagged = 1, untagged = 0;
 };
 
 //! TODO: Take hint from siw.h, and complete
 
 
-struct pd {
-    uint32_t pd_id;
-};
+//struct pd {
+  //  uint32_t pd_id;
+//};
 
 struct ddp_stream_context {
     int sockfd;
     struct pd* pd_id;
 };
 
-struct stag_t {
-    uint32_t id;
-    struct pd* pd_id;
-};
+//struct stag_t {
+ //   uint32_t id;
+   // struct pd* pd_id;
+//};
 
 struct ddp_stream_context* ddp_init_stream(int sockfd, struct pd* pd_id);
 
