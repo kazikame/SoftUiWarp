@@ -48,14 +48,16 @@
 //! C++ stdlib abomination
 #include <unordered_map>
 
-#define MAX_UNTAGGED_BUFFERS 5
+#define MAX_UNTAGGED_BUFFERS 3
 #define DDP_CTRL_SIZE 1
+#define DDP_TAGGED_HDR_SIZE sizeof(struct ddp_tagged_meta)
+#define DDP_UNTAGGED_HDR_SIZE sizeof(struct ddp_untagged_meta)
 
 struct ddp_stream_context {
     int sockfd;
     struct pd_t* pd;
 
-    untagged_buffer_queue* queues;
+    struct untagged_buffer_queue* queues;
     std::unordered_map<__u32, tagged_buffer> tagged_buffers;
 };
 
@@ -80,25 +82,27 @@ inline int ddp_is_tagged(__u8 bits)
     return DDP_HDR_T & bits;
 }
 
+//! TODO: Bad Alignment. Can cause performance problems.
 struct __attribute__((__packed__)) ddp_tagged_meta {
-    __u8 rsvdULP1 = 0;
+    __u8 rsvdULP1;
     __u32 tag;
     __u64 TO;
 };
 
+//! TODO: Bad Alignment. Can cause performance problems.
 struct __attribute__((__packed__)) ddp_untagged_meta {
-    __u8 rsvdULP1 = 0;
+    __u8 rsvdULP1;
     __u32 rsvdULP2;
     __u32 qn;
     __u32 msn;
-    __u32 mo = 0;
+    __u32 mo;
 };
 
 struct ddp_message {
-    struct ddp_hdr* hdr;
+    struct ddp_hdr hdr;
     union {
-        struct ddp_tagged_meta* tagged_metadata;
-        struct ddp_untagged_meta* untagged_metadata;
+        struct ddp_tagged_meta tagged_metadata;
+        struct ddp_untagged_meta untagged_metadata;
     };
     union {
         struct untagged_buffer* untag_buf;
@@ -131,8 +135,18 @@ int ddp_send_untagged(struct ddp_stream_context*, struct ddp_untagged_meta*, sge
  * @param buf buffer
  */
 void ddp_post_recv(struct ddp_stream_context*, int qn, struct untagged_buffer* buf);
+inline struct untagged_buffer_queue* ddp_check_untagged_hdr(struct ddp_stream_context* ctx, struct ddp_tagged_meta* hdr);
 
-int ddp_recv(struct ddp_stream_context*, struct ddp_message*);
+/**
+ * @brief Receives a DDP message. Blocking
+ * 
+ * `msg` must be allocated.
+ * 
+ * @param ctx 
+ * @param msg 
+ * @return int 
+ */
+int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg);
 
 /**
  * @brief Registers a tagged memory region
@@ -144,5 +158,14 @@ int ddp_recv(struct ddp_stream_context*, struct ddp_message*);
 int register_tagged_buffer(struct ddp_stream_context*, struct tagged_buffer*);
 void deregister_tagged_buffer(struct ddp_stream_context*, struct stag_t*);
 
+/**
+ * @brief checks if the stag and offset are valid wrt to `ctx`
+ *        and returns the buffer. Returns NULL on error
+ * 
+ * @param ctx 
+ * @param hdr 
+ * @return int 
+ */
+inline struct tagged_buffer* ddp_check_stag(struct ddp_stream_context* ctx, struct ddp_tagged_meta* hdr);
 
 #endif

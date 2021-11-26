@@ -51,7 +51,7 @@ struct untagged_buffer {
 };
 
 struct untagged_buffer_queue {
-    moodycamel::ConcurrentQueue<struct untagged_buffer> q;
+    moodycamel::ConcurrentQueue<struct untagged_buffer>* q;
     int msn = 1;
 };
 
@@ -67,7 +67,7 @@ struct stag_t {
 struct tagged_buffer {
     stag_t stag;
     void* data;
-    int len;
+    uint64_t len;
     int access_ctrl = 0;
 };
 

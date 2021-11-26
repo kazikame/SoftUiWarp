@@ -44,6 +44,8 @@
 #include <stdint.h>
 #include <asm/byteorder.h>
 
+#define likely(x)       __builtin_expect((x),1)
+#define unlikely(x)     __builtin_expect((x),0)
 
 #define RDMAP_VERSION		1
 #define DDP_VERSION		1

@@ -1,3 +1,41 @@
+/*
+ * Software Userspace iWARP device driver for Linux
+ *
+ * Authors: Saksham Goel <saksham@cs.utexas.edu>
+ *
+ * Copyright (c) 2021
+ *
+ * This software is available to you under a choice of one of two
+ * licenses.  You may choose to be licensed under the terms of the GNU
+ * General Public License (GPL) Version 2, available from the file
+ * COPYING in the main directory of this source tree, or the
+ * BSD license below:
+ *
+ *   Redistribution and use in source and binary forms, with or
+ *   without modification, are permitted provided that the following
+ *   conditions are met:
+ *
+ *   - Redistributions of source code must retain the above copyright notice,
+ *     this list of conditions and the following disclaimer.
+ *
+ *   - Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer in the
+ *     documentation and/or other materials provided with the distribution.
+ *
+ *   - Neither the name of IBM nor the names of its contributors may be
+ *     used to endorse or promote products derived from this software without
+ *     specific prior written permission.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+ * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+#include <arpa/inet.h>
 #include "ddp.h"
 #include "mpa/mpa.h"
 
@@ -8,6 +46,10 @@ struct ddp_stream_context* ddp_init_stream(int sockfd, struct pd_t* pd)
     ctx->pd = pd;
 
     ctx->queues = new untagged_buffer_queue[MAX_UNTAGGED_BUFFERS];
+    for (int i = 0; i < MAX_UNTAGGED_BUFFERS; i++)
+    {
+        ctx->queues[i].q = new moodycamel::ConcurrentQueue<struct untagged_buffer>();
+    }
     return ctx;
 }
 
@@ -130,12 +172,166 @@ void ddp_post_recv(struct ddp_stream_context* ctx, int qn, struct untagged_buffe
         return;
     } 
 
-    ctx->queues[qn].q.enqueue(*buf);
+    ctx->queues[qn].q->enqueue(*buf);
+}
+struct untagged_buffer_queue* ddp_check_untagged_hdr(struct ddp_stream_context* ctx, struct ddp_untagged_meta* hdr)
+{
+    uint32_t qn = ntohl(hdr->qn);
+    if (qn >= MAX_UNTAGGED_BUFFERS)
+    {
+        lwlog_err("Invalid queue detected %d", qn);
+        return NULL;
+    }
+
+    //! UT represent!
+    struct untagged_buffer_queue* ut_q = &ctx->queues[qn];
+
+    uint32_t msn = ntohl(hdr->msn);
+    if (ut_q->msn < msn)
+    {
+        lwlog_err("Invalid MSN detected %d (current %d)", msn, ut_q->msn);
+        return NULL;
+    }
+
+    //! TODO: Add MO check
+
+    return ut_q;
 }
 
-int ddp_recv(struct ddp_stream_context*, struct ddp_message*)
+//! TODO: receive should timeout after a certain threshold
+int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
 {
-    return -1;
+    int ddp_payload_len = 0;
+
+    siw_mpa_packet mpa_packet;
+    mpa_packet.ulpdu = (char*) &msg->hdr.bits;
+
+    //! Get DDP Control Header
+    int ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_CTRL_SIZE);
+    if (unlikely(ret < 0))
+    {
+        lwlog_err("ddp recv failed %d", ret);
+        return ret;
+    }
+    
+    if (msg->hdr.bits & DDP_HDR_T)
+    {
+        //! Tagged
+        lwlog_info("DDP Tagged Header detected");
+        
+        int mpa_payload_len = mpa_packet.ulpdu_len - (DDP_CTRL_SIZE + DDP_TAGGED_HDR_SIZE);
+        //! Check if remaining length has data
+        if (unlikely(mpa_payload_len < 0))
+        {
+            lwlog_err("mpa packet is smaller than ddp tagged header");
+            return -1;
+        }
+
+        //! Get remaining header
+        mpa_packet.ulpdu = (char*) &msg->tagged_metadata;
+
+        ret = mpa_recv(ctx->sockfd, &mpa_packet, sizeof(msg->tagged_metadata));
+        if (unlikely(ret < 0))
+        {
+            lwlog_err("ddp recv failed %d", ret);
+            return ret;
+        }
+
+        //! Check stag validity and get the tagged buffer
+        msg->tag_buf = ddp_check_stag(ctx, &msg->tagged_metadata);
+        if (unlikely(msg->tag_buf == NULL))
+        {
+            return -1;
+        }
+
+        //! Get entire payload
+        uint32_t orig_stag = msg->tagged_metadata.tag;
+        uint64_t orig_TO = msg->tagged_metadata.TO;
+        while(true)
+        {
+            //! Copy current payload to the right path
+            mpa_packet.ulpdu = (char *) msg->tagged_metadata.TO;
+            ret = mpa_recv(ctx->sockfd, &mpa_packet, mpa_payload_len);
+            ddp_payload_len += mpa_payload_len;
+            
+            if (unlikely(ret < 0)) return -1;
+            
+            //! Check if this was the last
+            if (msg->tagged_metadata.rsvdULP1 & DDP_FLAG_LAST) break;
+
+            //! Get next header
+            mpa_packet.ulpdu = (char *) msg;
+            ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_CTRL_SIZE + DDP_TAGGED_HDR_SIZE);
+            if (unlikely(ret < 0)) return -1;
+            mpa_payload_len = mpa_packet.ulpdu_len - (DDP_CTRL_SIZE + DDP_TAGGED_HDR_SIZE);
+
+            //! TODO: Check TO/Stag validity
+        }
+
+        msg->tagged_metadata.TO = orig_TO;
+    }
+    else
+    {
+        //! Untagged
+        lwlog_info("DDP Untagged Header detected");
+
+        int mpa_payload_len = mpa_packet.ulpdu_len - (DDP_CTRL_SIZE + DDP_UNTAGGED_HDR_SIZE);
+        //! Check if remaining length has data
+        if (unlikely(mpa_payload_len < 0))
+        {
+            lwlog_err("mpa packet is smaller than ddp untagged header");
+            return -1;
+        }
+
+        //! Get remaining header
+        mpa_packet.ulpdu = (char*) &msg->untagged_metadata;
+
+        ret = mpa_recv(ctx->sockfd, &mpa_packet, sizeof(msg->untagged_metadata));
+        if (unlikely(ret < 0))
+        {
+            lwlog_err("ddp recv failed %d", ret);
+            return ret;
+        }
+
+        //! Check untagged header validty
+        struct untagged_buffer_queue* ut_q = ddp_check_untagged_hdr(ctx, &msg->untagged_metadata);
+        if (unlikely(ut_q == NULL))
+        {
+            return -1;
+        }
+        struct untagged_buffer buf;
+        int found = ut_q->q->try_dequeue(buf);
+        if (unlikely(!found))
+        {
+            lwlog_err("untagged buffer queue is empty");
+        }
+
+        //! Get entire payload
+        while(true)
+        {
+            //! Copy current payload to the right path
+            mpa_packet.ulpdu = (char *) ((uint64_t)buf.data + msg->untagged_metadata.mo);
+            ret = mpa_recv(ctx->sockfd, &mpa_packet, mpa_payload_len);
+            ddp_payload_len += mpa_payload_len;
+            if (unlikely(ret < 0)) return -1;
+            
+            //! Check if this was the last
+            if (msg->untagged_metadata.rsvdULP1 & DDP_FLAG_LAST) break;
+
+            //! Get next header
+            mpa_packet.ulpdu = (char *) msg;
+            ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_CTRL_SIZE + DDP_UNTAGGED_HDR_SIZE);
+            if (unlikely(ret < 0)) return -1;
+            mpa_payload_len = mpa_packet.ulpdu_len - (DDP_CTRL_SIZE + DDP_UNTAGGED_HDR_SIZE);
+
+            //! TODO: Check QN/MSN/MO validity
+        }
+
+        msg->untagged_metadata.mo = 0;
+    }
+
+    msg->len = ddp_payload_len;
+    return 0;
 }
 
 int register_tagged_buffer(struct ddp_stream_context* ctx, struct tagged_buffer* buf) 
@@ -148,4 +344,24 @@ int register_tagged_buffer(struct ddp_stream_context* ctx, struct tagged_buffer*
 void deregister_tagged_buffer(struct ddp_stream_context* ctx, struct stag_t* stag)
 {
     ctx->tagged_buffers.erase(stag->tag);
+}
+
+//! C++ function, bad
+struct tagged_buffer* ddp_check_stag(struct ddp_stream_context* ctx, struct ddp_tagged_meta* hdr)
+{
+    auto it = ctx->tagged_buffers.find(ntohl(hdr->tag));
+    if (it == ctx->tagged_buffers.end())
+    {
+        lwlog_err("ddp recv found invalid tag");
+        return NULL;
+    }
+
+    if ((uint64_t)it->second.data > ntohll(hdr->TO) || (uint64_t)it->second.data + it->second.len < ntohll(hdr->TO))
+    {
+        lwlog_err("invalid offset");
+        return NULL;
+    }
+    //! TODO: Do access control
+
+    return &it->second;
 }
