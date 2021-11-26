@@ -55,9 +55,7 @@
 #include "suiw/rdmap.h"
 #include "lwlog.h"
 
-#define ULPDU_MAX_SIZE 1 << 16
 #define CRC_SIZE 4
-#define FPDU_MAX_SIZE ULPDU_MAX_SIZE + 2 + CRC_SIZE
 
 static char doc[] = "Fake rdma ping which implements iWARP";
 static char log_buf[1024];
@@ -175,6 +173,7 @@ int main(int argc, char **argv)
         return 1;
     }
     attr.sockfd = sockfd;
+    attr.max_pending_read_requests = 10;
 
     //! Register Buffers
     struct rdmap_stream_context* ctx = rdmap_init_stream(&attr);
@@ -187,8 +186,8 @@ int main(int argc, char **argv)
     //! Create Tagged Buffer for read
     char buf[] = "rdma-ping-0: ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqr";
     tagged_buffer tg_buf;
-    tg_buf.data = buf;
-    tg_buf.len = 1000;
+    tg_buf.data = (char*)buf;
+    tg_buf.len = sizeof(buf);
 
     register_tagged_buffer(ctx->ddp_ctx, &tg_buf);
     __u32 stag = tg_buf.stag.tag;
@@ -201,13 +200,12 @@ int main(int argc, char **argv)
         close(sockfd);
     }
 
-    //! Make Send Work Request
+    //! Make Send Work Request: scatter/gather
     struct send_wr req;
     req.wr_id = 1;
 
-    //! Make Scatter/Gather req
     struct send_data d;
-    d.offset = htonll((uint64_t)buf);
+    d.offset = htonll((uint64_t)(char*)buf);
     d.stag = htonl(stag);
     d.size = htonl(sizeof(buf));
 
@@ -219,7 +217,7 @@ int main(int argc, char **argv)
     req.num_sge = 1;
     req.opcode = RDMAP_SEND;
 
-    lwlog_info("Sending RDMAP: %lld %u %u", d.offset, d.stag, d.size);
+    lwlog_info("Sending RDMAP: %lu %u %lu", (uint64_t)(char*)buf, stag, sizeof(buf));
     rdmap_send(ctx, std::move(req));
 
     sleep(10);

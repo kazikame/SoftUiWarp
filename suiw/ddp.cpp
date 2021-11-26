@@ -176,7 +176,7 @@ void ddp_post_recv(struct ddp_stream_context* ctx, int qn, struct untagged_buffe
 }
 struct untagged_buffer_queue* ddp_check_untagged_hdr(struct ddp_stream_context* ctx, struct ddp_untagged_meta* hdr)
 {
-    uint32_t qn = ntohl(hdr->qn);
+    uint32_t qn = hdr->qn;
     if (qn >= MAX_UNTAGGED_BUFFERS)
     {
         lwlog_err("Invalid queue detected %d", qn);
@@ -186,8 +186,8 @@ struct untagged_buffer_queue* ddp_check_untagged_hdr(struct ddp_stream_context* 
     //! UT represent!
     struct untagged_buffer_queue* ut_q = &ctx->queues[qn];
 
-    uint32_t msn = ntohl(hdr->msn);
-    if (ut_q->msn < msn)
+    uint32_t msn = hdr->msn;
+    if (ut_q->msn > msn)
     {
         lwlog_err("Invalid MSN detected %d (current %d)", msn, ut_q->msn);
         return NULL;
@@ -239,11 +239,15 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
         }
 
         //! Check stag validity and get the tagged buffer
-        msg->tag_buf = ddp_check_stag(ctx, &msg->tagged_metadata);
-        if (unlikely(msg->tag_buf == NULL))
+        msg->tagged_metadata.tag = ntohl(msg->tagged_metadata.tag);
+        msg->tagged_metadata.TO = ntohll(msg->tagged_metadata.TO);
+
+        struct tagged_buffer* ptr = ddp_check_stag(ctx, &msg->tagged_metadata);
+        if (unlikely(ptr == NULL))
         {
             return -1;
         }
+        msg->tag_buf = *ptr;
 
         //! Get entire payload
         uint32_t orig_stag = msg->tagged_metadata.tag;
@@ -265,7 +269,7 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
             ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_CTRL_SIZE + DDP_TAGGED_HDR_SIZE);
             if (unlikely(ret < 0)) return -1;
             mpa_payload_len = mpa_packet.ulpdu_len - (DDP_CTRL_SIZE + DDP_TAGGED_HDR_SIZE);
-
+            msg->tagged_metadata.TO = ntohll(msg->tagged_metadata.TO);
             //! TODO: Check TO/Stag validity
         }
 
@@ -274,7 +278,7 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
     else
     {
         //! Untagged
-        lwlog_info("DDP Untagged Header detected");
+        lwlog_debug("DDP Untagged Header detected");
 
         int mpa_payload_len = mpa_packet.ulpdu_len - (DDP_CTRL_SIZE + DDP_UNTAGGED_HDR_SIZE);
         //! Check if remaining length has data
@@ -287,21 +291,27 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
         //! Get remaining header
         mpa_packet.ulpdu = (char*) &msg->untagged_metadata;
 
-        ret = mpa_recv(ctx->sockfd, &mpa_packet, sizeof(msg->untagged_metadata));
+        ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_UNTAGGED_HDR_SIZE);
         if (unlikely(ret < 0))
         {
             lwlog_err("ddp recv failed %d", ret);
             return ret;
         }
 
+        //! NTOHL :(
+        msg->untagged_metadata.mo = ntohl(msg->untagged_metadata.mo);
+        msg->untagged_metadata.qn = ntohl(msg->untagged_metadata.qn);
+        msg->untagged_metadata.msn = ntohl(msg->untagged_metadata.msn);
+
+        lwlog_debug("MO %u QN %u MSN %u", msg->untagged_metadata.mo, msg->untagged_metadata.qn, msg->untagged_metadata.msn)
         //! Check untagged header validty
         struct untagged_buffer_queue* ut_q = ddp_check_untagged_hdr(ctx, &msg->untagged_metadata);
         if (unlikely(ut_q == NULL))
         {
             return -1;
         }
-        struct untagged_buffer buf;
-        int found = ut_q->q->try_dequeue(buf);
+
+        int found = ut_q->q->try_dequeue(msg->untag_buf);
         if (unlikely(!found))
         {
             lwlog_err("untagged buffer queue is empty");
@@ -311,7 +321,7 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
         while(true)
         {
             //! Copy current payload to the right path
-            mpa_packet.ulpdu = (char *) ((uint64_t)buf.data + msg->untagged_metadata.mo);
+            mpa_packet.ulpdu = (char *) ((uint64_t)msg->untag_buf.data + msg->untagged_metadata.mo);
             ret = mpa_recv(ctx->sockfd, &mpa_packet, mpa_payload_len);
             ddp_payload_len += mpa_payload_len;
             if (unlikely(ret < 0)) return -1;
@@ -325,6 +335,7 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
             if (unlikely(ret < 0)) return -1;
             mpa_payload_len = mpa_packet.ulpdu_len - (DDP_CTRL_SIZE + DDP_UNTAGGED_HDR_SIZE);
 
+            msg->untagged_metadata.mo = ntohl(msg->untagged_metadata.mo);
             //! TODO: Check QN/MSN/MO validity
         }
 
@@ -338,6 +349,7 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
 int register_tagged_buffer(struct ddp_stream_context* ctx, struct tagged_buffer* buf) 
 {
     buf->stag.tag = (__u32)((__u64)buf->data);
+    lwlog_info("Registering tagged buffer with stag %u (pointer %u)", buf->stag.tag, (__u32)((__u64)buf->data));
     ctx->tagged_buffers[buf->stag.tag] = (*buf);
     return 0;
 }
@@ -351,14 +363,14 @@ int deregister_tagged_buffer(struct ddp_stream_context* ctx, struct stag_t* stag
 //! C++ function, bad
 struct tagged_buffer* ddp_check_stag(struct ddp_stream_context* ctx, struct ddp_tagged_meta* hdr)
 {
-    auto it = ctx->tagged_buffers.find(ntohl(hdr->tag));
+    auto it = ctx->tagged_buffers.find(hdr->tag);
     if (it == ctx->tagged_buffers.end())
     {
         lwlog_err("ddp recv found invalid tag");
         return NULL;
     }
 
-    if ((uint64_t)it->second.data > ntohll(hdr->TO) || (uint64_t)it->second.data + it->second.len < ntohll(hdr->TO))
+    if ((uint64_t)it->second.data > hdr->TO || (uint64_t)it->second.data + it->second.len < hdr->TO)
     {
         lwlog_err("invalid offset");
         return NULL;

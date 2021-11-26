@@ -44,7 +44,7 @@
 #include "cq.h"
 #include <pthread.h>
 
-struct rdmap_ctrl {
+struct __attribute__((packed)) rdmap_ctrl {
     __u8 bits;
 };
 
@@ -71,18 +71,18 @@ struct rdmap_message {
  * For Read Request, Send, and Terminate
  * 
  */
-struct rdmap_untagged_hdr {
+struct __attribute__((packed)) rdmap_untagged_hdr {
     __u32 tag;
     __u32 qn;
     __u32 msn;
     __u32 mo;
 };
-struct rdmap_read_req_fields {
+struct __attribute__((packed)) rdmap_read_req_fields {
     __u32 sink_tag;
-    __u32 sink_TO;
+    __u64 sink_TO;
     __u32 rdma_rd_sz;
     __u32 src_tag;
-    __u32 src_TO;
+    __u64 src_TO;
 };
 
 /**
@@ -91,12 +91,12 @@ struct rdmap_read_req_fields {
  * For Write, Read Response
  * 
  */
-struct rdmap_tagged_hdr {
+struct __attribute__((packed)) rdmap_tagged_hdr {
     __u32 tag;
     __u64 TO;
 };
 
-struct rdmap_terminate_hdr {
+struct __attribute__((packed)) rdmap_terminate_hdr {
     __u32 ctrl_bits;
 };
 

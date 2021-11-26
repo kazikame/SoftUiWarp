@@ -105,8 +105,8 @@ struct ddp_message {
         struct ddp_untagged_meta untagged_metadata;
     };
     union {
-        struct untagged_buffer* untag_buf;
-        struct tagged_buffer* tag_buf;
+        struct untagged_buffer untag_buf;
+        struct tagged_buffer tag_buf;
     };
     int len;
 };

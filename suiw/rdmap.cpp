@@ -83,33 +83,38 @@ void* rnic_recv(void* ctx_ptr)
         {
             case rdma_opcode::RDMAP_RDMA_WRITE: {
                 assert(ddp_is_tagged(ddp_message.hdr.bits));
-                lwlog_info("Someone wrote data at %p", ddp_message.tag_buf->data);
+                lwlog_info("Someone wrote data at %p", ddp_message.tag_buf.data);
                 //! do nothing :)
                 break;
             }
             case rdma_opcode::RDMAP_RDMA_READ_REQ: {
                 assert(!ddp_is_tagged(ddp_message.hdr.bits));
                 // handle w/o letting the client know
-                read_req = (struct rdmap_read_req_fields*) ddp_message.untag_buf->data;
+                read_req = (struct rdmap_read_req_fields*) ddp_message.untag_buf.data;
 
                 //! Get the corresponding tagged buffer
-                auto it = ctx->ddp_ctx->tagged_buffers.find(read_req->src_tag);
+                lwlog_debug("Read Req Fields %u %llu %u %u %llu", read_req->sink_tag,
+                                                                read_req->sink_TO,
+                                                                read_req->rdma_rd_sz,
+                                                                read_req->src_tag,
+                                                                read_req->src_TO);
+                auto it = ctx->ddp_ctx->tagged_buffers.find(ntohl(read_req->src_tag));
                 if (unlikely(it == ctx->ddp_ctx->tagged_buffers.end()))
                 {
-                    lwlog_err("Read request for stag %u not found", read_req->src_tag);
+                    lwlog_err("Read request for stag %u not found", ntohl(read_req->src_tag));
                 }
-                sg.addr = read_req->src_TO;
-                sg.lkey = read_req->src_tag;
-                sg.length = read_req->rdma_rd_sz;
+                sg.addr = ntohll(read_req->src_TO);
+                sg.lkey = ntohl(read_req->src_tag);
+                sg.length = ntohl(read_req->rdma_rd_sz);
 
-                read_resp.wr.rdma.rkey = read_req->sink_tag;
-                read_resp.wr.rdma.remote_addr = read_req->sink_TO;
+                read_resp.wr.rdma.rkey = ntohl(read_req->sink_tag);
+                read_resp.wr.rdma.remote_addr = ntohll(read_req->sink_TO);
                 
                 sq->enqueue(read_resp);
                 read_resp.wr_id++;
 
                 //! Replenish untagged buffer in queue 1
-                ddp_post_recv(ctx->ddp_ctx, READ_QN, ddp_message.untag_buf, 1);
+                ddp_post_recv(ctx->ddp_ctx, READ_QN, &ddp_message.untag_buf, 1);
                 break;
             }
             case rdma_opcode::RDMAP_RDMA_READ_RESP: {
@@ -158,12 +163,15 @@ void* rnic_recv(void* ctx_ptr)
             }
             case rdma_opcode::RDMAP_TERMINATE: {
                 assert(!ddp_is_tagged(ddp_message.hdr.bits));
+                ctx->connected = 0;
+                lwlog_err("Terminate received");
                 break;
             }
         }
     }
 
     //! Graceful exit
+    lwlog_info("Recv loop thread exiting");
     return NULL;
 }
 
@@ -207,6 +215,7 @@ void* rnic_send(void* ctx_ptr)
                 //! Notify completion queue
                 if (unlikely(ret < 0))
                 {
+                    lwlog_err("RDMA Send failed %d", ret);
                     wce.status = WC_FATAL_ERR;
                 }
                 else 
@@ -323,6 +332,7 @@ void* rnic_send(void* ctx_ptr)
         }
     }
 
+    lwlog_info("Send loop thread exiting");
     return NULL;
 }
 

@@ -270,6 +270,7 @@ int mpa_send(int sockfd, sge* sg_list, int num_sge, int flags)
 int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes)
 {
     //! If receiving the packet for the first time, get MPA header
+    lwlog_debug("Reading num_bytes %d", num_bytes);
     int rcvd = 0;
     if (info->bytes_rcvd < MPA_HDR_SIZE)
     {
@@ -283,12 +284,13 @@ int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes)
             lwlog_err("mpa_recv: didn't receive enough bytes");
             return -1;
         }
+        info->ulpdu_len = ntohs(info->ulpdu_len);
+        lwlog_info("Received MPA Message Header: %d, ULPDU Len: %u", rcvd, info->ulpdu_len);
         info->bytes_rcvd = MPA_HDR_SIZE;
     }
 
-    int packet_len = ntohs(info->ulpdu_len);
+    int packet_len = info->ulpdu_len;
     
-    lwlog_info("Received MPA Message Header: %d", packet_len);
 
     if (packet_len <= 0)
     {
@@ -305,6 +307,7 @@ int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes)
     if (ulpdu_rem_size <= num_bytes)
     {
         num_bytes_to_read = ulpdu_rem_size;
+        lwlog_debug("Reading %d and MPA packet trailers as well", num_bytes_to_read);
         read_trailers = 1;
     }
     

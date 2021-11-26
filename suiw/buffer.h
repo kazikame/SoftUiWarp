@@ -48,6 +48,9 @@
 struct untagged_buffer {
     char* data;
     uint32_t len;
+
+    //! When passing a chain of untagged buffers
+    struct untagged_buffer* next;
 };
 
 struct untagged_buffer_queue {
@@ -68,7 +71,7 @@ struct tagged_buffer {
     stag_t stag;
     void* data;
     uint64_t len;
-    int access_ctrl = 0;
+    int access_ctrl;
 };
 
 #endif

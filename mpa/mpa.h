@@ -41,12 +41,15 @@
 
 #include "common/iwarp.h"
 
-//! Assuming ethernet
 #define EMSS 1460
 #define MULPDU EMSS - (6 + 4 * (EMSS / 512 + 1) + EMSS % 4)
 
 #define MPA_HDR_SIZE	2
 #define MPA_CRC_SIZE	4
+
+//! Assuming ethernet
+#define ULPDU_MAX_SIZE 1 << 16
+#define FPDU_MAX_SIZE ULPDU_MAX_SIZE + 2 + MPA_CRC_SIZE
 
 //!
 extern int mpa_protocol_version;
