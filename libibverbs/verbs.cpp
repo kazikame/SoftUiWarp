@@ -102,8 +102,13 @@ struct ibv_device **ibv_get_device_list(int *num_devices) {
     ibv_device **device_list = real_get_device_list(&num);
     // We'll return a copy of that list, with our fake device added.
     ibv_device **result = (ibv_device**) malloc(sizeof(struct ibv_device*)*(num+2));
-    // Copy the list.
-    memcpy(result, device_list, sizeof(struct ibv_device*)*(num));
+    for (int i = 0; i < num; i++) {
+        // We need to individually copy all the structs within the list, 
+        // since they'll be invalid after we free the original list.
+        ibv_device *dev = (ibv_device*) malloc(sizeof(struct ibv_device));
+        memcpy(dev, device_list[i], sizeof(struct ibv_device));
+        result[i] = dev;
+    }
     // Add our device.
     result[num] = suiw_get_ibv_device();
     // Null terminate.
@@ -126,6 +131,10 @@ struct ibv_device **ibv_get_device_list(int *num_devices) {
  */
 void ibv_free_device_list(struct ibv_device **list) {
 	printf("ibv_free_device_list\n");
+    int i = 0;
+    while (list[i]) {
+        free(list[i++]);
+    }
     free(list);
 }
 
@@ -134,7 +143,11 @@ void ibv_free_device_list(struct ibv_device **list) {
  */
 const char *ibv_get_device_name(struct ibv_device *device) {
 	printf("ibv_get_device_name\n");
-	return device->name;
+    if (suiw_is_device_softuiwarp(device)) {
+        return device->dev_name;
+    } else {
+        return real_get_device_name(device);
+    }
 }
 
 /**
@@ -142,7 +155,11 @@ const char *ibv_get_device_name(struct ibv_device *device) {
  */
 __be64 ibv_get_device_guid(struct ibv_device *device) {
 	printf("ibv_get_device_guid\n");
-	return -1;
+    if (suiw_is_device_softuiwarp(device)) {
+        return suiw_get_device_guid(device);
+    } else {
+        return real_get_device_guid(device);
+    }
 }
 
 /**
@@ -150,7 +167,11 @@ __be64 ibv_get_device_guid(struct ibv_device *device) {
  */
 struct ibv_context *ibv_open_device(struct ibv_device *device) {
 	printf("ibv_open_device\n");
-	return NULL;
+    if (suiw_is_device_softuiwarp(device)) {
+        return suiw_open_device(device);
+    } else {
+        return real_open_device(device);
+    }
 }
 
 /**
@@ -158,7 +179,11 @@ struct ibv_context *ibv_open_device(struct ibv_device *device) {
  */
 int ibv_close_device(struct ibv_context *context) {
 	printf("ibv_close_device\n");
-	return -1;
+    if (suiw_is_device_softuiwarp(context->device)) {
+        return suiw_close_device(context);
+    } else {
+        return real_close_device(context);
+    }
 }
 
 /**
@@ -194,7 +219,11 @@ void ibv_ack_async_event(struct ibv_async_event *event) {
 int ibv_query_device(struct ibv_context *context,
 		     struct ibv_device_attr *device_attr) {
 	printf("ibv_query_device\n");
-	return -1;
+    if (suiw_is_device_softuiwarp(context->device)) {
+        return suiw_query_device(context, device_attr);
+    } else {
+        return real_query_device(context, device_attr);
+    }
 }
 
 /**
