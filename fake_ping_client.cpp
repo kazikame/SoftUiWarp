@@ -56,6 +56,8 @@
 #include "lwlog.h"
 
 #define CRC_SIZE 4
+#define RPING_MSG_FMT           "rdma-ping-%d: "
+#define BUF_LEN                 64
 
 static char doc[] = "Fake rdma ping which implements iWARP";
 static char log_buf[1024];
@@ -135,6 +137,53 @@ struct send_data {
     __u32 size;
 };
 
+struct ping_context {
+    struct rdmap_stream_context* ctx;
+    sem_t sem;
+    pthread_t cqt;
+};
+
+void* cq_thread(void* data)
+{
+    lwlog_info("CQ thread started");
+    struct ping_context* ping_ctx = (struct ping_context*) data;
+    auto cq = ping_ctx->ctx->recv_q->cq->q;
+    struct work_completion wc;
+
+    char garbage_buffer[1000];
+
+    //! Receive WR
+    struct recv_wr wr;
+    wr.wr_id = 1901;
+
+    struct sge sg;
+    sg.addr = (uint64_t)garbage_buffer;
+    sg.length = 1000;
+    wr.sg_list = &sg;
+    wr.num_sge = 1;
+
+    rdma_post_recv(ping_ctx->ctx, wr);
+    while(ping_ctx->ctx->connected)
+    {
+        int ret = cq->try_dequeue(wc);
+        if (!ret) continue;
+
+        if (wc.opcode != WC_SEND || wc.wr_id != wr.wr_id) {
+            continue;
+        }
+        if (wc.status != WC_SUCCESS)
+        {
+            lwlog_err("Received remote send with error");
+            ping_ctx->ctx->connected = 0;
+            break;
+        }
+
+        lwlog_info("Remote send recvd: %lu", wc.wr_id);
+        rdma_post_recv(ping_ctx->ctx, wr);
+        sem_post(&ping_ctx->sem);
+    }
+}
+
 int main(int argc, char **argv)
 {
     //! TODO: Use a better argparse library
@@ -184,7 +233,7 @@ int main(int argc, char **argv)
     rq->context = ctx;
 
     //! Create Tagged Buffer for read
-    char buf[] = "rdma-ping-0: ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqr";
+    char buf[BUF_LEN];
     tagged_buffer tg_buf;
     tg_buf.data = (char*)buf;
     tg_buf.len = sizeof(buf);
@@ -217,8 +266,63 @@ int main(int argc, char **argv)
     req.num_sge = 1;
     req.opcode = RDMAP_SEND;
 
-    lwlog_info("Sending RDMAP: %lu %u %lu", (uint64_t)(char*)buf, stag, sizeof(buf));
-    rdmap_send(ctx, std::move(req));
+    /*
+     * rping "ping/pong" loop:
+     * 	client sends source rkey/addr/len
+     *	server receives source rkey/add/len
+     *	server rdma reads "ping" data from source
+     * 	server sends "go ahead" on rdma read completion
+     *	client sends sink rkey/addr/len
+     * 	server receives sink rkey/addr/len
+     * 	server rdma writes "pong" data to sink
+     * 	server sends "go ahead" on rdma write completion
+     * 	<repeat loop>
+     */
+    struct ping_context ping_ctx;
+    ping_ctx.ctx = ctx;
+    
+    //! Semaphore
+    sem_init(&ping_ctx.sem, 0, 0);
 
-    sleep(10);
+    //! Completion Queue Thread
+    pthread_create(&ping_ctx.cqt, 0, cq_thread, &ping_ctx);
+    //! Main Client Loop
+    int start = 65;
+    ret = 0;
+    int cc = 0;
+    for (int ping = 0; ctx->connected; ping++) {
+
+		/* Put some ascii text in the buffer. */
+		cc = snprintf(buf, sizeof(buf), RPING_MSG_FMT, ping);
+		for (int i = cc, c = start; i < sizeof(buf); i++) {
+			buf[i] = c;
+			c++;
+			if (c > 122)
+				c = 65;
+		}
+		start++;
+		if (start > 122)
+			start = 65;
+		buf[sizeof(buf) - 1] = 0;
+        lwlog_info("buffer before read: %s", buf);
+
+        ret = rdmap_send(ctx, req);
+		if (ret < 0) {
+			lwlog_err("post send error %d", ret);
+			break;
+		}
+
+		/* Wait for server to ACK */
+		sem_wait(&ping_ctx.sem);
+
+		ret = rdmap_send(ctx, req);
+		if (ret < 0) {
+			lwlog_err("post send error %d", ret);
+			break;
+		}
+
+		/* Wait for the server to say the RDMA Write is complete. */
+		sem_wait(&ping_ctx.sem);
+        lwlog_info("buffer after write: %s", buf);
+	}
 }

@@ -395,21 +395,21 @@ void rdmap_kill_stream(struct rdmap_stream_context* ctx) {
 //! Use rdmap_stream_context->ddp_ctx for those
 
 
-int rdmap_send(struct rdmap_stream_context* ctx, struct send_wr&& wr)
+int rdmap_send(struct rdmap_stream_context* ctx, struct send_wr& wr)
 {
-    return ctx->send_q->send_q->enqueue(std::move(wr));
+    return ctx->send_q->send_q->enqueue(wr);
 }
 
-int rdmap_write(struct rdmap_stream_context* ctx, struct send_wr&& wr)
+int rdmap_write(struct rdmap_stream_context* ctx, struct send_wr& wr)
 {
     assert(wr.opcode == rdma_opcode::RDMAP_RDMA_WRITE);
-    return ctx->send_q->send_q->enqueue(std::move(wr));
+    return ctx->send_q->send_q->enqueue(wr);
 }
 
-int rdmap_read(struct rdmap_stream_context* ctx, struct send_wr&& wr)
+int rdmap_read(struct rdmap_stream_context* ctx, struct send_wr& wr)
 {
     assert(wr.opcode == rdma_opcode::RDMAP_RDMA_READ_REQ);
-    return ctx->send_q->send_q->enqueue(std::move(wr));
+    return ctx->send_q->send_q->enqueue(wr);
 }
 
 /**
@@ -419,7 +419,7 @@ int rdmap_read(struct rdmap_stream_context* ctx, struct send_wr&& wr)
  * @param buf 
  * @return int 
  */
-int rdma_post_recv(struct rdmap_stream_context* ctx, struct recv_wr&& wr)
+int rdma_post_recv(struct rdmap_stream_context* ctx, struct recv_wr& wr)
 {
     //! Add to untagged buffer
     struct untagged_buffer buf[wr.num_sge];
