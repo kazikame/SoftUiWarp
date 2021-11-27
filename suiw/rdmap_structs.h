@@ -36,31 +36,94 @@
  * SOFTWARE.
  */
 
-#include "iwarp.h"
-#include <stdio.h>
-#include <string.h>
+#ifndef _RDMAP_S_H
+#define _RDMAP_S_H
 
-#define MAX_BUF_LEN 1024
+#include "ddp.h"
+#include "common/iwarp.h"
+#include "cq.h"
+#include <pthread.h>
 
-void print_mpa_rr(const struct mpa_rr* hdr, char* buf)
+struct __attribute__((packed)) rdmap_ctrl {
+    __u8 bits;
+};
+
+struct rdmap_message {
+    struct rdmap_ctrl* ctrl;
+
+    //! RDMAP fields from DDP header
+    union {
+        struct rdmap_tagged_hdr* tag_hdr;
+        struct rdmap_untagged_hdr* untag_hdr;
+    };
+
+    //! RDMAP fields from DDP payload (ONLY read request and terminate)
+    union {
+        struct rdmap_read_req_hdr* read_req_hdr;
+        struct rdmap_terminate_hdr* terminate_hdr;
+    };
+    void* payload;
+};
+
+/**
+ * According to RFC 5040.
+ * 
+ * For Read Request, Send, and Terminate
+ * 
+ */
+struct __attribute__((packed)) rdmap_untagged_hdr {
+    __u32 tag;
+    __u32 qn;
+    __u32 msn;
+    __u32 mo;
+};
+struct __attribute__((packed)) rdmap_read_req_fields {
+    __u32 sink_tag;
+    __u64 sink_TO;
+    __u32 rdma_rd_sz;
+    __u32 src_tag;
+    __u64 src_TO;
+};
+
+/**
+ * According to RFC 5040.
+ * 
+ * For Write, Read Response
+ * 
+ */
+struct __attribute__((packed)) rdmap_tagged_hdr {
+    __u32 tag;
+    __u64 TO;
+};
+
+struct __attribute__((packed)) rdmap_terminate_hdr {
+    __u32 ctrl_bits;
+};
+
+static inline __u8 get_rdmap_op(__u8 bits)
 {
-    const struct mpa_rr_params* params = &hdr->params;
-    if (strncmp(MPA_KEY_REQ, hdr->key, MPA_RR_KEY_LEN) || strncmp(MPA_KEY_REP, hdr->key, MPA_RR_KEY_LEN))
-    {
-        snprintf(buf, 1024, "iWARP MPA RR Header\n"
-                            "\tKey: %.*s\n"
-                            "\tMarker Flag: %d\n"
-                            "\tCRC Flag: %d\n"
-                            "\tConnection Rejected Flag: %d\n"
-                            "\tRevision: %d\n"
-                            "\tPD Length: %d\n",
-                            MPA_RR_KEY_LEN,
-                            hdr->key,
-                            (params->bits & MPA_RR_FLAG_MARKERS) > 0,
-                            (params->bits & MPA_RR_FLAG_CRC) > 0,
-                            (params->bits & MPA_RR_FLAG_REJECT) > 0,
-                            __mpa_rr_revision(params->bits),
-                            __be16_to_cpu(params->pd_len));
-        return;
-    }
+    return bits & 0xF;
 }
+
+struct rdmap_stream_context {
+    struct ddp_stream_context* ddp_ctx;
+    int connected = 0;
+
+    struct wq* send_q;
+    struct wq* recv_q;
+
+    pthread_t recv_thread;
+    pthread_t send_thread;
+};
+
+struct rdmap_stream_init_attr {
+    int sockfd;
+    struct pd_t* pd;
+    
+    struct wq* send_q;
+    struct wq* recv_q;
+
+    int max_pending_read_requests;
+};
+
+#endif

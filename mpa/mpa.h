@@ -41,12 +41,15 @@
 
 #include "common/iwarp.h"
 
-//! Assuming ethernet
 #define EMSS 1460
 #define MULPDU EMSS - (6 + 4 * (EMSS / 512 + 1) + EMSS % 4)
 
 #define MPA_HDR_SIZE	2
 #define MPA_CRC_SIZE	4
+
+//! Assuming ethernet
+#define ULPDU_MAX_SIZE 1 << 16
+#define FPDU_MAX_SIZE ULPDU_MAX_SIZE + 2 + MPA_CRC_SIZE
 
 //!
 extern int mpa_protocol_version;
@@ -82,28 +85,26 @@ int mpa_recv_rr(int sockfd, struct siw_mpa_info* info);
  */
 int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_recv);
 
-/**
- * @brief sends an MPA packet
- * 
- * ulpdu size must be in bytes.
- * 
- * @param sockfd TCP socket connection
- * @param ulpdu MPA packet payload
- * @param len MPA packet payload length. Must fit in 2 octets.
- * @param flags 
- * @return int 
- */
-int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags);
+int mpa_send(int sockfd, sge* sg_list, int num_sge, int flags);
 
 /**
  * @brief receives an MPA packet
  * 
  * info struct must be pointing to valid memory
  * 
+ * @note instead of receiving the entire packet in one go
+ *       this function can be called multiple times.
+ *       Each invocation will change info->bytes_received.
+ *       The *first* invocation per packet will fill in the ulpdu_len
+ *       and other header fields.
+ *       Each invocation will directly copy the _remaining_
+ *       ulpdu bytes to info->ulpdu (no offset will be added).
+ * 
  * @param sockfd TCP socket connection
  * @param info pointer to packet struct
+ * @param num_bytes number of bytes of ulpdu to read
  * @return int numbers of bytes received, negative if error
  */
-int mpa_recv(int sockfd, struct siw_mpa_packet* info);
+int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes);
 
 #endif

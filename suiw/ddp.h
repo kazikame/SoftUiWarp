@@ -38,112 +38,134 @@
  * SOFTWARE.
  */
 
-
-/**
- DDP has been designed with the following high-level architectural
- goals:
-
-    * Provide a buffer model that enables the Local Peer to Advertise
-    a named buffer (i.e., a Tag for a buffer) to the Remote Peer,
-    such that across the network the Remote Peer can Place data into
-    the buffer at Remote-Peer-specified locations.  This is referred
-    to as the Tagged Buffer Model.
-
-    * Provide a second receive buffer model that preserves ULP message
-    boundaries from the Remote Peer and keeps the Local Peer's
-    buffers anonymous (i.e., Untagged).  This is referred to as the
-    Untagged Buffer Model.
-
-    * Provide reliable, in-order Delivery semantics for both Tagged
-    and Untagged Buffer Models.
-
-    * Provide segmentation and reassembly of ULP messages.
-
-    * Enable the ULP Buffer to be used as a reassembly buffer, without
-    a need for a copy, even if incoming DDP Segments arrive out of
-    order.  This requires the protocol to separate Data Placement of
-    ULP Payload contained in an incoming DDP Segment from Data
-    Delivery of completed ULP Messages.
-
-    * If the Lower Layer Protocol (LLP) supports multiple LLP Streams
-    within an LLP Connection, provide the above capabilities
-    independently on each LLP Stream and enable the capability to be
-    exported on a per-LLP-Stream basis to the ULP.
-
-Basically:
-1. chops ULP data into DDP segments according to MULPDU
-2. places data directly into receive buffers:
-    - if tagged, then must have sent an STag before using ULP
-    - if untagged, then must have registered a series of ordered buffers by ULP
- */
+#include <stdlib.h>
+#include "lwlog.h"
+#include "buffer.h"
+#include "common/iwarp.h"
 #include <linux/types.h>
 #include <asm/byteorder.h>
 
-#define DDP_TAGGED_HDR_SIZE 14
-#define DDP_UNTAGGED_HDR_SIZE 18
+//! C++ stdlib abomination
+#include <unordered_map>
 
-struct ddp_tagged_hdr {
-    __u8 reserved;
-    __u32 stag;
-    __u64 to;
+#define MAX_UNTAGGED_BUFFERS 3
+#define DDP_CTRL_SIZE 1
+#define DDP_TAGGED_HDR_SIZE sizeof(struct ddp_tagged_meta)
+#define DDP_UNTAGGED_HDR_SIZE sizeof(struct ddp_untagged_meta)
+
+struct ddp_stream_context {
+    int sockfd;
+    struct pd_t* pd;
+
+    struct untagged_buffer_queue* queues;
+    std::unordered_map<__u32, tagged_buffer> tagged_buffers;
 };
 
-struct ddp_untagged_hdr {
-    __u8 reserved;
-    __u32 reserved2;
+struct ddp_hdr {
+    __u8 bits = 0;
+};
+
+enum {
+    // T|L| Rsvd  | DV|
+    DDP_HDR_T = 1 << 7,
+    DDP_HDR_L = 1 << 6,
+    DDP_HDR_RSVD = 0xF << 2,
+    DDP_HDR_DV = 0x3,
+};
+
+inline __u8 ddp_set_tagged(__u8 bits) {
+    return bits;
+}
+
+inline int ddp_is_tagged(__u8 bits)
+{
+    return DDP_HDR_T & bits;
+}
+
+//! TODO: Bad Alignment. Can cause performance problems.
+struct __attribute__((__packed__)) ddp_tagged_meta {
+    __u8 rsvdULP1;
+    __u32 tag;
+    __u64 TO;
+};
+
+//! TODO: Bad Alignment. Can cause performance problems.
+struct __attribute__((__packed__)) ddp_untagged_meta {
+    __u8 rsvdULP1;
+    __u32 rsvdULP2;
     __u32 qn;
     __u32 msn;
     __u32 mo;
 };
 
-struct ddp_hdr {
-    __u8 ctrl;
-    union {
-        struct ddp_tagged_hdr tagged;
-        struct ddp_untagged_hdr untagged;
-    };
-};
-
-/* only for receiving */
-struct ddp_packet {
+struct ddp_message {
     struct ddp_hdr hdr;
-    char* data;
+    union {
+        struct ddp_tagged_meta tagged_metadata;
+        struct ddp_untagged_meta untagged_metadata;
+    };
+    union {
+        struct untagged_buffer untag_buf;
+        struct tagged_buffer tag_buf;
+    };
+    int len;
 };
 
-//! TODO: Take hint from siw.h, and complete
+/**
+ * @brief Inits a DDP stream
+ * 
+ * makes the queues as well
+ * TODO: take input a new struct ddp_init_attr
+ * 
+ * @param sockfd MPA connected socket
+ * @param pd protection domain
+ * @return struct ddp_stream_context* 
+ */
+struct ddp_stream_context* ddp_init_stream(int sockfd, struct pd_t* pd);
+void ddp_kill_stream(struct ddp_stream_context* ctx);
 
+int ddp_send_tagged(struct ddp_stream_context*, struct ddp_tagged_meta*, sge* sge_list, int num_sge);
+int ddp_send_untagged(struct ddp_stream_context*, struct ddp_untagged_meta*, sge* sge_list, int num_sge);
 
-struct pd {
-    __u32 pd_id;
-};
+/**
+ * @brief Registers a buffer in queue `qn` for an untagged message
+ *        Buffers are consumed in a FIFO manner
+ * 
+ * @param qn queue number in which the buffer is added
+ * @param buf buffer
+ */
+void ddp_post_recv(struct ddp_stream_context*, int qn, struct untagged_buffer* buf, int num_bufs);
+inline struct untagged_buffer_queue* ddp_check_untagged_hdr(struct ddp_stream_context* ctx, struct ddp_tagged_meta* hdr);
 
-struct ddp_stream_context {
-    int sockfd;
-    struct pd pd_id;
-};
+/**
+ * @brief Receives a DDP message. Blocking
+ * 
+ * `msg` must be allocated.
+ * 
+ * @param ctx 
+ * @param msg 
+ * @return int 
+ */
+int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg);
 
-struct stag_t {
-    __u32 id;
-    struct pd pd_id;
-};
+/**
+ * @brief Registers a tagged memory region
+ * 
+ * The stag is filled by this function, and should be empty.
+ * 
+ * @return int 
+ */
+int register_tagged_buffer(struct ddp_stream_context*, struct tagged_buffer*);
+int deregister_tagged_buffer(struct ddp_stream_context*, struct stag_t*);
 
-struct ddp_stream_context* ddp_init_stream(int sockfd, struct pd* pd_id);
-
-void ddp_kill_stream(struct ddp_stream_context*);
-
-int register_stag(struct stag_t* tag);
-
-//! Check validity (stag, etc.)
-int ddp_tagged_recv(struct ddp_stream_context* ctx, struct ddp_packet* packet);
-
-//! Fragementation + Send
-int ddp_tagged_send(struct ddp_stream_context* ctx, struct stag_t* tag, __u32 offset, void* data, __u32 len);
-
-//! Register Queues
-
-
-//! Untagged send/recv
-
-//! TODO: Test fake_ping_client by sending the next Send/Read Request data
+/**
+ * @brief checks if the stag and offset are valid wrt to `ctx`
+ *        and returns the buffer. Returns NULL on error
+ * 
+ * @param ctx 
+ * @param hdr 
+ * @return int 
+ */
+inline struct tagged_buffer* ddp_check_stag(struct ddp_stream_context* ctx, struct ddp_tagged_meta* hdr);
 
 #endif

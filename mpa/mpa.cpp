@@ -47,7 +47,6 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-
 #include "mpa.h"
 
 #include "lwlog.h"
@@ -61,7 +60,7 @@ int mpa_send_rr(int sockfd, const void* pdata, __u8 pd_len, int req)
     struct mpa_rr hdr;
     memset(&hdr, 0, sizeof hdr);
 
-    strncpy(hdr.key, req ? MPA_KEY_REQ : MPA_KEY_REP, MPA_RR_KEY_LEN);
+    strncpy((char*)hdr.key, req ? MPA_KEY_REQ : MPA_KEY_REP, MPA_RR_KEY_LEN);
     int version = MPA_REVISION_1;
     __mpa_rr_set_revision(&hdr.params.bits, version);
 
@@ -118,7 +117,7 @@ int mpa_recv_rr(int sockfd, struct siw_mpa_info* info)
 
     __u16 pd_len = __be16_to_cpu(hdr->params.pd_len);
 
-    int is_req = strncmp(MPA_KEY_REQ, hdr->key, MPA_RR_KEY_LEN) == 0;
+    int is_req = strncmp(MPA_KEY_REQ, (char*)hdr->key, MPA_RR_KEY_LEN) == 0;
     //! private data length is 0, and is request
     if (!pd_len)
     {
@@ -157,7 +156,7 @@ int mpa_recv_rr(int sockfd, struct siw_mpa_info* info)
     //! TODO: this is basically a memory leak. remove
     if (!info->pdata)
     {
-        info->pdata = malloc(pd_len + 4);
+        info->pdata = (char*)malloc(pd_len + 4);
         if (!info->pdata)
         {
             lwlog_err("mpa_recv_rr: out of memory");
@@ -188,30 +187,42 @@ int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_re
 {
     int ret = mpa_send_rr(sockfd, pdata_send, pd_len, 1);
     if (ret < 0) return ret;
-
-    struct siw_mpa_info* info = malloc(sizeof(struct siw_mpa_info));
+    struct siw_mpa_info* info = (siw_mpa_info*)malloc(sizeof(struct siw_mpa_info));
     if (!info)
     {
         lwlog_err("out of memory");
         return -1;
     }
-    info->pdata = pdata_recv;
+    info->pdata = (char*)pdata_recv;
     
-    ret = mpa_recv_rr(sockfd, info);
+    mpa_recv_rr(sockfd, info);
 
     mpa_protocol_version = __mpa_rr_revision(info->hdr.params.bits);
     free(info);
-    return ret;
+    return 0;
 }
 
-int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags)
+int mpa_send(int sockfd, sge* sg_list, int num_sge, int flags)
 {
     //! Make sendmsg() msg struct
     struct msghdr msg;
     memset(&msg, 0, sizeof(msg));
 
-    struct iovec iov[6];
+    struct iovec iov[5 + num_sge];
     int iovec_num = 0;
+
+    //! Find total Length of ULPDU
+    __u16 len = 0;
+    for (int i = 0; i < num_sge; i++)
+    {
+        len += sg_list[i].length;
+    }
+
+    if (len > EMSS) 
+    {
+        lwlog_err("Sending MPA packet larger than EMSS: %d", len);
+        return -1;
+    }
 
     //! MPA Header
     __be16 mpa_len = htons(len);
@@ -220,9 +231,14 @@ int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags)
     iovec_num++;
 
     //! ULPDU
-    iov[iovec_num].iov_base = ulpdu;
-    iov[iovec_num].iov_len = len;
-    iovec_num++;
+    for (int i = 0; i < num_sge; i++)
+    {
+        char* pkt = (char*)(sg_list[i].addr);
+        iov[iovec_num].iov_base = pkt;
+        iov[iovec_num].iov_len = sg_list[i].length;
+        iovec_num++;
+    }
+
 
     //! Padding
     int padding_bytes = (len + sizeof(mpa_len)) % 4;
@@ -251,22 +267,30 @@ int mpa_send(int sockfd, void* ulpdu, __u16 len, int flags)
     return ret;
 }
 
-int mpa_recv(int sockfd, struct siw_mpa_packet* info)
+int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes)
 {
-    int bytes_rcvd = 0;
-
-    //! Get header
-    int rcvd = recv(sockfd, &info->ulpdu_len, MPA_HDR_SIZE, 0);
-
-    if (rcvd < MPA_HDR_SIZE)
+    //! If receiving the packet for the first time, get MPA header
+    lwlog_debug("Reading num_bytes %d", num_bytes);
+    int rcvd = 0;
+    if (info->bytes_rcvd < MPA_HDR_SIZE)
     {
-        lwlog_err("mpa_recv: didn't receive enough bytes");
-        return -1;
-    }
-    bytes_rcvd += rcvd;
+        int bytes_rcvd = info->bytes_rcvd;
 
-    int packet_len = ntohs(info->ulpdu_len);
-    lwlog_info("Received MPA Message Header: %d", packet_len);
+        //! Get header
+        rcvd = recv(sockfd, (char*)&info->ulpdu_len + (uint)bytes_rcvd, MPA_HDR_SIZE - bytes_rcvd, 0);
+
+        if (rcvd < MPA_HDR_SIZE - bytes_rcvd)
+        {
+            lwlog_err("mpa_recv: didn't receive enough bytes");
+            return -1;
+        }
+        info->ulpdu_len = ntohs(info->ulpdu_len);
+        lwlog_info("Received MPA Message Header: %d, ULPDU Len: %u", rcvd, info->ulpdu_len);
+        info->bytes_rcvd = MPA_HDR_SIZE;
+    }
+
+    int packet_len = info->ulpdu_len;
+    
 
     if (packet_len <= 0)
     {
@@ -274,31 +298,52 @@ int mpa_recv(int sockfd, struct siw_mpa_packet* info)
         return -2;
     }
 
-    //! Get payload
-    int padding_len = (MPA_HDR_SIZE + packet_len) % 4;
-    int payload_len = packet_len + padding_len;
-    rcvd = recv(sockfd, info->ulpdu, payload_len, 0);
+    int ulpdu_rem_size = packet_len - (info->bytes_rcvd - MPA_HDR_SIZE);
 
-    if (rcvd != payload_len)
+    int num_bytes_to_read = num_bytes;
+    int read_trailers = 0;
+    //! If `num_bytes` to read are more than the remaining payload left,
+    //! then read the trailers as well
+    if (ulpdu_rem_size <= num_bytes)
+    {
+        num_bytes_to_read = ulpdu_rem_size;
+        lwlog_debug("Reading %d and MPA packet trailers as well", num_bytes_to_read);
+        read_trailers = 1;
+    }
+    
+    rcvd = recv(sockfd, info->ulpdu, num_bytes_to_read, 0);
+
+    if (rcvd < num_bytes_to_read)
     {
         lwlog_err("mpa_recv: didn't receive enough bytes after header (%d)", rcvd);
         return -1;
     }
-    bytes_rcvd += rcvd;
 
-    //! Get crc
-    rcvd = recv(sockfd, &info->crc, MPA_CRC_SIZE, 0);
+    info->bytes_rcvd += rcvd;
 
-    if (rcvd != MPA_CRC_SIZE)
+    if (read_trailers)
     {
-        lwlog_err("mpa_recv: didn't receive enough bytes for crc (%d)", rcvd);
-        return -1;
+        //! Get padding
+        int padding_len = (packet_len + MPA_HDR_SIZE) % 4;
+        rcvd = recv(sockfd, &info->crc, padding_len, 0);
+        if (rcvd < padding_len)
+        {
+            lwlog_err("mpa_recv: didn't receive enough bytes for padding (%d)", rcvd);
+            return -1;
+        }
+        info->bytes_rcvd += rcvd;
+
+        //! Get crc
+        rcvd = recv(sockfd, &info->crc, MPA_CRC_SIZE, 0);
+        if (rcvd != MPA_CRC_SIZE)
+        {
+            lwlog_err("mpa_recv: didn't receive enough bytes for crc (%d)", rcvd);
+            return -1;
+        }
+        info->bytes_rcvd += rcvd;
+
+        //! TODO: Check CRC
     }
-    bytes_rcvd += rcvd;
 
-    //! TODO: Check CRC
-
-    info->bytes_rcvd = bytes_rcvd;
-
-    return bytes_rcvd;
+    return info->bytes_rcvd;
 }

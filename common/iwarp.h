@@ -41,8 +41,11 @@
 #define _IWARP_H
 
 #include <linux/types.h>
+#include <stdint.h>
 #include <asm/byteorder.h>
 
+#define likely(x)       __builtin_expect((x),1)
+#define unlikely(x)     __builtin_expect((x),0)
 
 #define RDMAP_VERSION		1
 #define DDP_VERSION		1
@@ -79,7 +82,7 @@ struct mpa_rr {
 	struct mpa_rr_params params;
 };
 void print_mpa_rr(const struct mpa_rr*, char*);
-
+void print_ddp(struct ddp_packet*, char*);
 static inline void __mpa_rr_set_revision(__u16 *bits, __u8 rev)
 {
 	*bits = (*bits & ~MPA_RR_MASK_REVISION)
@@ -167,7 +170,7 @@ static inline void __rdmap_set_version(struct iwarp_ctrl *ctrl, __u8 version)
 			| (__cpu_to_be16(version << 6) & RDMAP_MASK_VERSION);
 }
 
-static inline __u8 __rdmap_opcode(struct iwarp_ctrl *ctrl)
+static inline __u8 __rdma_opcode(struct iwarp_ctrl *ctrl)
 {
 	return (__u8)__be16_to_cpu(ctrl->ddp_rdmap_ctrl & RDMAP_MASK_OPCODE);
 }
@@ -363,6 +366,7 @@ enum llp_etype {
 	LLP_ETYPE_MPA	= 0x00
 };
 
+/* RFC 5040 */
 enum rdma_opcode {
 	RDMAP_RDMA_WRITE	= 0x0,
 	RDMAP_RDMA_READ_REQ	= 0x1,
@@ -395,10 +399,24 @@ struct siw_mpa_info {
  * MPA packet in host byte order
  */
 struct siw_mpa_packet {
-	__u16 ulpdu_len;
+	__u16 ulpdu_len = 0;
 	char *ulpdu;
-	__u32 crc;
-	int bytes_rcvd;
+	__u32 crc = 0;
+	int bytes_rcvd = 0;
+};
+
+#if __BIG_ENDIAN__
+# define htonll(x) (x)
+# define ntohll(x) (x)
+#else
+# define htonll(x) ((uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32)
+# define ntohll(x) ((uint64_t)ntohl((x) & 0xFFFFFFFF) << 32) | ntohl((x) >> 32)
+#endif
+
+struct sge {
+	uint64_t		addr;
+	uint32_t		length;
+	uint32_t		lkey;
 };
 
 #endif
