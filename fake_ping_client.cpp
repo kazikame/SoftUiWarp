@@ -41,6 +41,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
+#include <semaphore.h>
 
 #include <netdb.h>
 #include <sys/types.h>
@@ -49,10 +50,10 @@
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
 
-#include "common/iwarp.h"
+#include "common.h"
 #include "mpa/mpa.h"
-#include "suiw/ddp.h"
-#include "suiw/rdmap.h"
+#include "ddp/ddp.h"
+#include "rdmap/rdmap.h"
 #include "lwlog.h"
 
 #define CRC_SIZE 4

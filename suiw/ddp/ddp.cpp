@@ -36,7 +36,7 @@
  * SOFTWARE.
  */
 #include <arpa/inet.h>
-#include "ddp.h"
+#include "ddp/ddp.h"
 #include "mpa/mpa.h"
 
 struct ddp_stream_context* ddp_init_stream(int sockfd, struct pd_t* pd)

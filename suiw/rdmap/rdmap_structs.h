@@ -39,8 +39,8 @@
 #ifndef _RDMAP_S_H
 #define _RDMAP_S_H
 
-#include "ddp.h"
-#include "common/iwarp.h"
+#include "ddp/ddp.h"
+#include "common.h"
 #include "cq.h"
 #include <pthread.h>
 

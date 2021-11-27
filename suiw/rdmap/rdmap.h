@@ -39,10 +39,10 @@
 #ifndef _RDMAP_H
 #define _RDMAP_H
 
-#include "buffer.h"
-#include "ddp.h"
-#include "rdmap_structs.h"
-#include "common/iwarp.h"
+#include "ddp/buffer.h"
+#include "ddp/ddp.h"
+#include "rdmap/rdmap_structs.h"
+#include "common.h"
 
 /**
  * Operations:

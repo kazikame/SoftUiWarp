@@ -36,9 +36,9 @@
  * SOFTWARE.
  */
 
-#include "buffer.h"
-#include "rdmap.h"
-#include "ddp.h"
+#include "ddp/buffer.h"
+#include "rdmap/rdmap.h"
+#include "ddp/ddp.h"
 #include "lwlog.h"
 #include "pthread.h"
 #include <arpa/inet.h>

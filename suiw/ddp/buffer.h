@@ -40,8 +40,8 @@
 #define _BUFFERS_H
 
 #include <stdlib.h>
-#include "blockingconcurrentqueue.h"
-#include <lwlog.h>
+#include "concurrentqueue.h"
+#include "lwlog.h"
 #include <linux/types.h>
 #include <asm/byteorder.h>
 

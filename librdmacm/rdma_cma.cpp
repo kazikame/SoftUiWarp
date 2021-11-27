@@ -35,7 +35,7 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 
-#include "softuiwarp.h"
+#include "softucommon.h"
 
 #include "rdma_cma.h"
 

@@ -42,8 +42,8 @@
 #include <stdlib.h>
 
 #include <linux/types.h>
-#include "common/iwarp.h"
-#include "blockingconcurrentqueue.h"
+#include "common.h"
+#include "concurrentqueue.h"
 
 enum wc_status {
 	WC_SUCCESS,

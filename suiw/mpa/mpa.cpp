@@ -47,7 +47,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include "mpa.h"
+#include "mpa/mpa.h"
 
 #include "lwlog.h"
 

@@ -11,7 +11,7 @@
 
 #include <map>
 
-#include "softuiwarp.h"
+#include "softucommon.h"
 #include "libsuiw_internal.h"
 
 /* Internal state. */

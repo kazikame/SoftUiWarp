@@ -38,7 +38,7 @@
 #include <dlfcn.h>
 
 #include "verbs.h"
-#include "softuiwarp.h"
+#include "softucommon.h"
 
 /* Real library symbols; bound in `init` when this library is loaded. */
 static struct ibv_device **(*real_get_device_list)(int*) = NULL;

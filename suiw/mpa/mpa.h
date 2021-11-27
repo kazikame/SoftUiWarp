@@ -39,7 +39,7 @@
 #ifndef _MPA_H
 #define _MPA_H
 
-#include "common/iwarp.h"
+#include "common.h"
 
 #define EMSS 1460
 #define MULPDU EMSS - (6 + 4 * (EMSS / 512 + 1) + EMSS % 4)

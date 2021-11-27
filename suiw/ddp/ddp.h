@@ -41,7 +41,7 @@
 #include <stdlib.h>
 #include "lwlog.h"
 #include "buffer.h"
-#include "common/iwarp.h"
+#include "common.h"
 #include <linux/types.h>
 #include <asm/byteorder.h>
 
