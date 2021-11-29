@@ -128,7 +128,7 @@ int mpa_recv_rr(int sockfd, struct siw_mpa_info* info)
             rcvd = recv(sockfd, (char *)&garbage, sizeof(garbage), MSG_DONTWAIT);
 
             //! No data on socket, the peer is protocol compliant :)
-            if (rcvd == -EAGAIN) return 0;
+            if (rcvd == -1 && errno == EAGAIN) return 0;
 
             if (rcvd > 0)
             {
@@ -187,18 +187,28 @@ int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_re
 {
     int ret = mpa_send_rr(sockfd, pdata_send, pd_len, 1);
     if (ret < 0) return ret;
-    struct siw_mpa_info* info = (siw_mpa_info*)malloc(sizeof(struct siw_mpa_info));
-    if (!info)
-    {
-        lwlog_err("out of memory");
-        return -1;
-    }
-    info->pdata = (char*)pdata_recv;
+    struct siw_mpa_info info;
+    memset(&info, 0, sizeof(siw_mpa_info));
+    info.pdata = (char*)pdata_recv;
     
-    mpa_recv_rr(sockfd, info);
+    mpa_recv_rr(sockfd, &info);
 
-    mpa_protocol_version = __mpa_rr_revision(info->hdr.params.bits);
-    free(info);
+    mpa_protocol_version = __mpa_rr_revision(info.hdr.params.bits);
+    return 0;
+}
+
+int mpa_server_accept(int sockfd, void *pdata_send, __u8 pd_len, void* pdata_recv)
+{
+    int ret;
+    struct siw_mpa_info info;
+    memset(&info, 0, sizeof(siw_mpa_info));
+    info.pdata = (char*)pdata_recv;
+    ret = mpa_recv_rr(sockfd, &info);
+    if (ret < 0) return ret;
+    mpa_protocol_version = __mpa_rr_revision(info.hdr.params.bits);
+
+    ret = mpa_send_rr(sockfd, pdata_send, pd_len, 0);
+    if (ret < 0) return ret;
     return 0;
 }
 

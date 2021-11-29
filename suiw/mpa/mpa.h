@@ -85,6 +85,8 @@ int mpa_recv_rr(int sockfd, struct siw_mpa_info* info);
  */
 int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_recv);
 
+int mpa_server_accept(int sockfd, void *pdata_send, __u8 pd_len, void* pdata_recv);
+
 int mpa_send(int sockfd, sge* sg_list, int num_sge, int flags);
 
 /**
