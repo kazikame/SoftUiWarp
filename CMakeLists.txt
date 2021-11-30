@@ -23,9 +23,5 @@ find_package(Threads REQUIRED)
 target_link_libraries(fake_ping_client PRIVATE Threads::Threads)
 target_link_libraries (fake_ping_client LINK_PRIVATE suiw)
 
-add_executable (fake_perftest_client fake_perftest_client.cpp)
-target_link_libraries(fake_perftest_client PRIVATE Threads::Threads)
-target_link_libraries (fake_perftest_client LINK_PRIVATE suiw)
-
 set(CMAKE_CXX_FLAGS_DEBUG_INIT "-ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE_INIT "-O3")

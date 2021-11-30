@@ -189,10 +189,10 @@ int alloc_hugepage_region(struct perftest_context *c) {
     if (c->buf == MAP_FAILED) {
         return -1;
     }
-    // Fill the server's region with incrementing values.
-    if (!c->is_client) {
+    // Fill the client's region with incrementing values.
+    if (c->is_client) {
         for (int i = 0; i < c->buf_size; i++) {
-            c->buf[i] = i % 256;
+            c->buf[i] = (char) i;
         }
     }
     return 0;
@@ -300,6 +300,14 @@ int main(int argc, char **argv)
     sq->context = ctx;
     rq->context = ctx;
 
+    // Create Tagged Buffer for read
+    tagged_buffer tg_buf;
+    tg_buf.data = (char*)perftest_ctx.buf;
+    tg_buf.len = sizeof(perftest_ctx.buf);
+
+    register_tagged_buffer(ctx->ddp_ctx, &tg_buf);
+    __u32 stag = tg_buf.stag.tag;
+
     // Build send WR.
     struct sge send_sg;
     struct send_wr send_wr;
@@ -317,21 +325,14 @@ int main(int argc, char **argv)
 
     // Build read WR.
     struct sge read_sg;
-    read_sg.addr = (uint64_t) perftest_ctx.buf;
-    read_sg.length = (uint64_t) perftest_ctx.buf_size;
+    read_sg.addr = ntohll((uint64_t) perftest_ctx.buf);
+    read_sg.length = ntohl(perftest_ctx.buf_size);
+    read_sg.lkey = ntohl(stag);
     struct send_wr read_wr;
     read_wr.wr_id = 2;
     read_wr.sg_list = &read_sg;
     read_wr.num_sge = 1;
     read_wr.opcode = RDMAP_RDMA_READ_REQ;
-
-    // Create Tagged Buffer for read
-    tagged_buffer tg_buf;
-    tg_buf.data = (char*)perftest_ctx.buf;
-    tg_buf.len = sizeof(perftest_ctx.buf);
-
-    register_tagged_buffer(ctx->ddp_ctx, &tg_buf);
-    __u32 stag = tg_buf.stag.tag;
 
     perftest_ctx.ctx = ctx;
 
@@ -352,9 +353,8 @@ int main(int argc, char **argv)
             lwlog_err("failed to recv client info!");
         }
         lwlog_info("Received addr %p stag %lu and size %lu from client.", (void*)sd.offset, sd.stag, sd.size);
-        read_sg.lkey = ntohl(stag);
         read_wr.wr.rdma.rkey = ntohl(sd.stag);
-        read_wr.wr.rdma.remote_addr = ntohl(sd.offset);
+        read_wr.wr.rdma.remote_addr = ntohll(sd.offset);
     }
 
     /* BEGIN BENCHMARKING */
@@ -362,9 +362,8 @@ int main(int argc, char **argv)
     auto read_cq = perftest_ctx.ctx->send_q->cq->q;
     if (!perftest_ctx.is_client) {
         start_cycles = get_cycles();
-        /*
-         * TODO: read doesn't seem to be working as expected
-        for (int iter = 0; iter < perftest_ctx.iters; iter++) {
+        //for (int iter = 0; iter < perftest_ctx.iters; iter++) {
+        for (int iter = 0; iter < 1; iter++) {
             lwlog_debug("iter: %d", iter)
             ret = rdmap_read(ctx, read_wr);
             if (ret < 0) {
@@ -377,19 +376,19 @@ int main(int argc, char **argv)
             lwlog_debug("received completion");
             if (wc.status != WC_SUCCESS) {
                 lwlog_err("Received remote send with error");
-            } else if (wc.opcode != WC_SEND) {
+            } else if (wc.opcode != WC_READ_REQUEST) {
                 lwlog_err("Received wrong message type!");
             }
-            if (true) {
-                for (int i = 0; i < perftest_ctx.buf_size; i++) {
-                    if (perftest_ctx.buf[i] != (i % 255)) {
-                        lwlog_err("Received incorrect value %d for index %d!", perftest_ctx.buf[i], i);
-                        break;
-                    }
+#ifdef PERFTEST_TEST
+            for (int i = 0; i < perftest_ctx.buf_size; i++) {
+                if (perftest_ctx.buf[i] != ((char) i)) {
+                    lwlog_err("Received incorrect value 0x%hhx for index %d!", perftest_ctx.buf[i], i);
+                    break;
                 }
             }
+            memset(perftest_ctx.buf, 0, perftest_ctx.buf_size);
+#endif // PERFTEST_TEST
         }
-        */
         end_cycles = get_cycles();
         total_cycles = end_cycles - start_cycles;
     }

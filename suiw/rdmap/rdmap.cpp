@@ -93,11 +93,11 @@ void* rnic_recv(void* ctx_ptr)
                 read_req = (struct rdmap_read_req_fields*) ddp_message.untag_buf.data;
 
                 //! Get the corresponding tagged buffer
-                lwlog_debug("Read Req Fields %u %llu %u %u %llu", read_req->sink_tag,
-                                                                read_req->sink_TO,
-                                                                read_req->rdma_rd_sz,
-                                                                read_req->src_tag,
-                                                                read_req->src_TO);
+                lwlog_debug("Read Req Fields %u 0x%lx %u %u 0x%lx", ntohl(read_req->sink_tag),
+                                                                ntohll(read_req->sink_TO),
+                                                                ntohl(read_req->rdma_rd_sz),
+                                                                ntohl(read_req->src_tag),
+                                                                ntohll(read_req->src_TO));
                 auto it = ctx->ddp_ctx->tagged_buffers.find(ntohl(read_req->src_tag));
                 if (unlikely(it == ctx->ddp_ctx->tagged_buffers.end()))
                 {
@@ -266,6 +266,7 @@ void* rnic_send(void* ctx_ptr)
                 struct rdmap_read_req_fields fields;
                 fields.sink_tag = req.sg_list[0].lkey;
                 fields.sink_TO = req.sg_list[0].addr;
+                fields.rdma_rd_sz = req.sg_list[0].length;
                 fields.src_tag = req.wr.rdma.rkey;
                 fields.src_TO = req.wr.rdma.remote_addr;
                 struct sge message;
