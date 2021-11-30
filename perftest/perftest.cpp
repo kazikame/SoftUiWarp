@@ -42,6 +42,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdbool.h>
+#include <time.h>
 
 #include <netdb.h>
 #include <sys/types.h>
@@ -56,7 +57,6 @@
 #include "ddp/ddp.h"
 #include "rdmap/rdmap.h"
 #include "lwlog.h"
-#include "get_clock.h"
 
 //#define PERFTEST_TEST
 
@@ -118,6 +118,12 @@ static int argparse(int argc, char **argv, struct perftest_context *c) {
         }
     } 
     return 0;
+}
+
+static inline uint64_t get_nanos(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t) ts.tv_sec * 1000 * 1000 * 1000 + ts.tv_nsec;
 }
 
 /**
@@ -360,10 +366,10 @@ int main(int argc, char **argv)
     }
 
     /* BEGIN BENCHMARKING */
-    cycles_t start_cycles, end_cycles, total_cycles;
+    uint64_t start_ns, end_ns, total_ns;
     auto read_cq = perftest_ctx.ctx->send_q->cq->q;
     if (!perftest_ctx.is_client) {
-        start_cycles = get_cycles();
+        start_ns = get_nanos();
         for (int iter = 0; iter < perftest_ctx.iters; iter++) {
             lwlog_debug("iter: %d", iter);
             ret = rdmap_read(ctx, read_wr);
@@ -390,26 +396,23 @@ int main(int argc, char **argv)
             memset(perftest_ctx.buf, 0, perftest_ctx.buf_size);
 #endif // PERFTEST_TEST
         }
-        end_cycles = get_cycles();
-        total_cycles = end_cycles - start_cycles;
+        end_ns = get_nanos();
+        total_ns = end_ns - start_ns;
     }
     
     if (perftest_ctx.is_client) {
         lwlog_info("Waiting for server finished notification ...");
-        rdmap_recv_data(&perftest_ctx, (void*)&total_cycles, sizeof(cycles_t), recv_wr);
+        rdmap_recv_data(&perftest_ctx, (void*)&total_ns, sizeof(uint64_t), recv_wr);
     } else {
         send_wr.wr_id = 234;
         lwlog_info("Finished benchmarking, notifying client.");
-        rdmap_send_data(&perftest_ctx, (void*)&total_cycles, sizeof(cycles_t), send_wr);
+        rdmap_send_data(&perftest_ctx, (void*)&total_ns, sizeof(uint64_t), send_wr);
     }
 
     // Print results.
-    double cpu_mhz = get_cpu_mhz(false);
     lwlog_notice("Completed test!");
-    lwlog_notice("Total Cycles: %llu", total_cycles);
-    lwlog_notice("Total Time (s): %f", (total_cycles/1000000.0/cpu_mhz));
-    lwlog_notice("Cycles per iteration: %llu", total_cycles/perftest_ctx.iters);
-    lwlog_notice("Time per iteration (us): %f", (total_cycles/cpu_mhz/perftest_ctx.iters));
+    lwlog_notice("Total Time (s): %f", (total_ns/(1000.0 * 1000.0 * 1000.0)));
+    lwlog_notice("Time per iteration (us): %f", (total_ns/1000.0/perftest_ctx.iters));
 
     // Cleanup.
     rdmap_kill_stream(perftest_ctx.ctx);

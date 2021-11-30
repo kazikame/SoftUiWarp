@@ -1,5 +1,4 @@
 add_executable (perftest 
-    get_clock.cpp
     perftest.cpp
 )
 set (THREADS_PREFER_PTHREAD_FLAG ON)
