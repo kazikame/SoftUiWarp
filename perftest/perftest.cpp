@@ -58,6 +58,8 @@
 #include "lwlog.h"
 #include "get_clock.h"
 
+//#define PERFTEST_TEST
+
 #define DEFAULT_BUF_SIZE 1024
 #define DEFAULT_ITERS 1024
 #define DEFAULT_IP "127.0.0.1"
@@ -145,7 +147,7 @@ int create_tcp_connection(struct perftest_context *config) {
     }
     if (config->is_client) {
         // Running the client, so connect to server.
-        lwlog_info("Connecting to server at %s:%s ...", config->ip, config->port);
+        lwlog_notice("Connecting to server at %s:%s ...", config->ip, config->port);
         if (connect(sock, res->ai_addr, res->ai_addrlen) == -1) {
             perror("connect");
             goto fail_freeaddrinfo;
@@ -163,7 +165,7 @@ int create_tcp_connection(struct perftest_context *config) {
             goto fail_freeaddrinfo;
         }
         // Accept a connection;
-        lwlog_info("Waiting for client to connect on port %s ... ", config->port);
+        lwlog_notice("Waiting for client to connect on port %s ... ", config->port);
         sock = accept(config->serverfd, 0, 0);    
         if (sock == -1) {
             perror("accept");
@@ -221,7 +223,7 @@ int rdmap_recv_data(struct perftest_context *perftest_ctx, void *buf, size_t buf
     struct work_completion wc;
     auto cqq = perftest_ctx->ctx->recv_q->cq->q;
     do { ret = cqq->try_dequeue(wc); } while (!ret) ;
-    lwlog_info("Received send data with id %lu", wc.wr_id);
+    lwlog_debug("Received send data with id %lu", wc.wr_id);
     if (wc.status != WC_SUCCESS) {
         lwlog_err("Received remote send with error");
     } else if (wc.opcode != WC_SEND) {
@@ -352,7 +354,7 @@ int main(int argc, char **argv)
         if (rdmap_recv_data(&perftest_ctx, (void*) &sd, sizeof(struct send_data), recv_wr) < 0) {
             lwlog_err("failed to recv client info!");
         }
-        lwlog_info("Received addr %p stag %lu and size %lu from client.", (void*)sd.offset, sd.stag, sd.size);
+        lwlog_debug("Received addr %p stag %lu and size %lu from client.", (void*)sd.offset, sd.stag, sd.size);
         read_wr.wr.rdma.rkey = ntohl(sd.stag);
         read_wr.wr.rdma.remote_addr = ntohll(sd.offset);
     }
@@ -362,9 +364,8 @@ int main(int argc, char **argv)
     auto read_cq = perftest_ctx.ctx->send_q->cq->q;
     if (!perftest_ctx.is_client) {
         start_cycles = get_cycles();
-        //for (int iter = 0; iter < perftest_ctx.iters; iter++) {
-        for (int iter = 0; iter < 1; iter++) {
-            lwlog_debug("iter: %d", iter)
+        for (int iter = 0; iter < perftest_ctx.iters; iter++) {
+            lwlog_debug("iter: %d", iter);
             ret = rdmap_read(ctx, read_wr);
             if (ret < 0) {
                 lwlog_err("Failed to issue RDMA READ!");
@@ -404,11 +405,11 @@ int main(int argc, char **argv)
 
     // Print results.
     double cpu_mhz = get_cpu_mhz(false);
-    lwlog_info("Completed test!");
-    lwlog_info("Total Cycles: %llu", total_cycles);
-    lwlog_info("Total Time: %f", (total_cycles/1000000.0/cpu_mhz));
-    lwlog_info("Cycles per iteration: %llu", total_cycles/perftest_ctx.iters);
-    lwlog_info("Time per iteration: %f", (total_cycles/1000000.0/cpu_mhz/perftest_ctx.iters));
+    lwlog_notice("Completed test!");
+    lwlog_notice("Total Cycles: %llu", total_cycles);
+    lwlog_notice("Total Time (s): %f", (total_cycles/1000000.0/cpu_mhz));
+    lwlog_notice("Cycles per iteration: %llu", total_cycles/perftest_ctx.iters);
+    lwlog_notice("Time per iteration (us): %f", (total_cycles/cpu_mhz/perftest_ctx.iters));
 
     // Cleanup.
     rdmap_kill_stream(perftest_ctx.ctx);

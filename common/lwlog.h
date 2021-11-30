@@ -13,7 +13,7 @@
 #include <string.h>
 
 #ifndef LOG_LEVEL
-#define LOG_LEVEL (7)
+#define LOG_LEVEL (5)
 #endif
 
 #ifndef LOG_COLOR
