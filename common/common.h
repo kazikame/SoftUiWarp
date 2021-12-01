@@ -48,6 +48,9 @@
 #define likely(x)       __builtin_expect((x),1)
 #define unlikely(x)     __builtin_expect((x),0)
 
+// Uncomment to compile TAS workarounds.
+//#define USE_TAS
+
 #define RDMAP_VERSION		1
 #define DDP_VERSION		1
 #define MPA_REVISION_1		1
