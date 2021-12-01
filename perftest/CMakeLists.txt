@@ -1,7 +1,5 @@
-add_executable (perftest 
+add_executable (read_lat 
     perftest.cpp
+    read_lat.cpp
 )
-set (THREADS_PREFER_PTHREAD_FLAG ON)
-find_package (Threads REQUIRED)
-target_link_libraries (perftest PRIVATE Threads::Threads)
-target_link_libraries (perftest LINK_PRIVATE suiw)
+target_link_libraries (read_lat LINK_PRIVATE suiw)

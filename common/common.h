@@ -42,6 +42,7 @@
 
 #include <linux/types.h>
 #include <stdint.h>
+#include <arpa/inet.h>
 #include <asm/byteorder.h>
 
 #define likely(x)       __builtin_expect((x),1)

@@ -1,7 +1,7 @@
 /*
- * Software Userspace iWARP device driver for Linux
+ * Performance test for SoftUIWarp library.
  *
- * Authors: Saksham Goel <saksham@cs.utexas.edu>
+ * Authors: Matthew Pabst <pabstmatthew@gmail.com>
  *
  * Copyright (c) 2021
  *
@@ -37,48 +37,23 @@
  */
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <errno.h>
 #include <string.h>
-#include <stdbool.h>
 #include <time.h>
-
 #include <netdb.h>
-#include <sys/types.h>
+
 #include <netinet/in.h>
+#include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/mman.h>
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
-#include <sys/mman.h>
 
 #include "common.h"
 #include "mpa/mpa.h"
 #include "ddp/ddp.h"
 #include "rdmap/rdmap.h"
-#include "lwlog.h"
-
-//#define PERFTEST_TEST
-
-#define DEFAULT_BUF_SIZE 1024
-#define DEFAULT_ITERS 1024
-#define DEFAULT_IP "127.0.0.1"
-#define DEFAULT_PORT "9999"
-
-static char doc[] = "Fake rdma ping which implements iWARP";
-static char log_buf[1024];
-
-struct perftest_context {
-    char* port; 
-    char* ip;
-    int buf_size;
-    char *buf;
-    int iters;
-    bool is_client;
-    int serverfd;
-    int huge_shmid;
-    struct rdmap_stream_context* ctx;
-};
+#include "perftest.h"
 
 static int argparse(int argc, char **argv, struct perftest_context *c) {
     int opt;
@@ -132,7 +107,7 @@ static inline uint64_t get_nanos(void) {
  * @param config ip/port config
  * @return int 0 if success, < 0 if error
  */
-int create_tcp_connection(struct perftest_context *config) {
+static int create_tcp_connection(struct perftest_context *config) {
     int ret;
     int sock;
     // Create the socket.
@@ -191,7 +166,7 @@ fail:
 #define DEFAULT_PAGE_SIZE 4096
 
 #if !defined(__FreeBSD__)
-int alloc_hugepage_region(struct perftest_context *c) {
+static int alloc_hugepage_region(struct perftest_context *c) {
     // Allocate regions, fingers crossed we get hugepages :]
     c->buf = (char*) mmap(NULL, c->buf_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
     if (c->buf == MAP_FAILED) {
@@ -207,7 +182,7 @@ int alloc_hugepage_region(struct perftest_context *c) {
 }
 #endif
 
-int rdmap_send_data(struct perftest_context *perftest_ctx, void *data, size_t data_len, struct send_wr &wr) {
+static int rdmap_send_data(struct perftest_context *perftest_ctx, void *data, size_t data_len, struct send_wr &wr) {
     wr.sg_list->addr = (uint64_t) data;
     wr.sg_list->length = data_len;
     int ret = rdmap_send(perftest_ctx->ctx, wr);
@@ -219,7 +194,7 @@ int rdmap_send_data(struct perftest_context *perftest_ctx, void *data, size_t da
     return ret;
 }
 
-int rdmap_recv_data(struct perftest_context *perftest_ctx, void *buf, size_t buf_len, struct recv_wr &wr) {
+static int rdmap_recv_data(struct perftest_context *perftest_ctx, void *buf, size_t buf_len, struct recv_wr &wr) {
     // Prepare the WR.
     wr.sg_list->addr = (uint64_t) buf;
     wr.sg_list->length = buf_len;
@@ -238,25 +213,21 @@ int rdmap_recv_data(struct perftest_context *perftest_ctx, void *buf, size_t buf
     return ret;
 }
 
-struct send_data {
-    uint64_t offset;
-    uint64_t stag;
-    uint64_t size;
-};
-
-int main(int argc, char **argv)
+void perftest_run(int argc, char **argv, 
+                  int (*test_init)(perftest_context*, uint32_t, struct send_data*),
+                  int (*test_iter)(perftest_context*))
 {
     //! Parse arguments.
     struct perftest_context perftest_ctx;
     if (argparse(argc, argv, &perftest_ctx)) {
         lwlog_err("Failed to parse arguments!");
-        return 1;
+        return;
     }
 
     // Alloc hugepage buffer.
     if (alloc_hugepage_region(&perftest_ctx) != 0) {
         lwlog_err("Failed to allocate hugepage buffer!");
-        return 1;
+        return;
     }
 
     //! Protection Domain
@@ -288,7 +259,7 @@ int main(int argc, char **argv)
     int sockfd = create_tcp_connection(&perftest_ctx);
     if (sockfd < 0) {
         lwlog_err("cannot create socket");
-        return 1;
+        return;
     }
     attr.sockfd = sockfd;
     attr.max_pending_read_requests = 10;
@@ -331,22 +302,11 @@ int main(int argc, char **argv)
     recv_wr.sg_list = &recv_sg;
     recv_wr.num_sge = 1;
 
-    // Build read WR.
-    struct sge read_sg;
-    read_sg.addr = ntohll((uint64_t) perftest_ctx.buf);
-    read_sg.length = ntohl(perftest_ctx.buf_size);
-    read_sg.lkey = ntohl(stag);
-    struct send_wr read_wr;
-    read_wr.wr_id = 2;
-    read_wr.sg_list = &read_sg;
-    read_wr.num_sge = 1;
-    read_wr.opcode = RDMAP_RDMA_READ_REQ;
-
     perftest_ctx.ctx = ctx;
 
     int ret;
+    struct send_data sd;
     if (perftest_ctx.is_client) {
-        struct send_data sd;
         sd.offset = (uint64_t) perftest_ctx.buf;
         sd.stag = stag;
         sd.size = perftest_ctx.buf_size;
@@ -356,50 +316,29 @@ int main(int argc, char **argv)
         }
     } else {
         // Receive remote_addr and rkey from client.
-        struct send_data sd;
         if (rdmap_recv_data(&perftest_ctx, (void*) &sd, sizeof(struct send_data), recv_wr) < 0) {
             lwlog_err("failed to recv client info!");
         }
         lwlog_debug("Received addr %p stag %lu and size %lu from client.", (void*)sd.offset, sd.stag, sd.size);
-        read_wr.wr.rdma.rkey = ntohl(sd.stag);
-        read_wr.wr.rdma.remote_addr = ntohll(sd.offset);
     }
 
     /* BEGIN BENCHMARKING */
-    uint64_t start_ns, end_ns, total_ns;
-    auto read_cq = perftest_ctx.ctx->send_q->cq->q;
-    if (!perftest_ctx.is_client) {
-        start_ns = get_nanos();
-        for (int iter = 0; iter < perftest_ctx.iters; iter++) {
-            lwlog_debug("iter: %d", iter);
-            ret = rdmap_read(ctx, read_wr);
-            if (ret < 0) {
-                lwlog_err("Failed to issue RDMA READ!");
-                break;
-            }
-            lwlog_debug("completed read");
-            struct work_completion wc;
-            do { ret = read_cq->try_dequeue(wc); } while (!ret) ;
-            lwlog_debug("received completion");
-            if (wc.status != WC_SUCCESS) {
-                lwlog_err("Received remote send with error");
-            } else if (wc.opcode != WC_READ_REQUEST) {
-                lwlog_err("Received wrong message type!");
-            }
-#ifdef PERFTEST_TEST
-            for (int i = 0; i < perftest_ctx.buf_size; i++) {
-                if (perftest_ctx.buf[i] != ((char) i)) {
-                    lwlog_err("Received incorrect value 0x%hhx for index %d!", perftest_ctx.buf[i], i);
-                    break;
-                }
-            }
-            memset(perftest_ctx.buf, 0, perftest_ctx.buf_size);
-#endif // PERFTEST_TEST
-        }
-        end_ns = get_nanos();
-        total_ns = end_ns - start_ns;
+    if (test_init(&perftest_ctx, stag, &sd)) {
+        lwlog_err("Test initialization failed!");
+        goto cleanup;
     }
-    
+    uint64_t start_ns, end_ns, total_ns;
+    start_ns = get_nanos();
+    for (int iter = 0; iter < perftest_ctx.iters; iter++) {
+        lwlog_debug("iter: %d", iter);
+        if (test_iter(&perftest_ctx)) {
+            lwlog_err("Test iteration failed!");
+            goto cleanup;
+        }
+    }
+    end_ns = get_nanos();
+    total_ns = end_ns - start_ns;
+
     if (perftest_ctx.is_client) {
         lwlog_info("Waiting for server finished notification ...");
         rdmap_recv_data(&perftest_ctx, (void*)&total_ns, sizeof(uint64_t), recv_wr);
@@ -415,6 +354,7 @@ int main(int argc, char **argv)
     lwlog_notice("Time per iteration (us): %f", (total_ns/1000.0/perftest_ctx.iters));
 
     // Cleanup.
+cleanup:
     rdmap_kill_stream(perftest_ctx.ctx);
     close(sockfd);
     munmap(perftest_ctx.buf, perftest_ctx.buf_size);
