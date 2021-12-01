@@ -103,6 +103,9 @@ void* rnic_recv(void* ctx_ptr)
                 {
                     lwlog_err("Read request for stag %u not found", ntohl(read_req->src_tag));
                 }
+                //! Replenish untagged buffer in queue 1
+                ddp_post_recv(ctx->ddp_ctx, READ_QN, &ddp_message.untag_buf, 1);
+
                 sg.addr = ntohll(read_req->src_TO);
                 sg.lkey = ntohl(read_req->src_tag);
                 sg.length = ntohl(read_req->rdma_rd_sz);
@@ -110,11 +113,12 @@ void* rnic_recv(void* ctx_ptr)
                 read_resp.wr.rdma.rkey = ntohl(read_req->sink_tag);
                 read_resp.wr.rdma.remote_addr = ntohll(read_req->sink_TO);
                 
-                sq->enqueue(read_resp);
+                lwlog_debug("Posting Read response to SQ");
+                while(!sq->enqueue(read_resp)) {
+                    lwlog_debug("Posting failed???");
+                };
                 read_resp.wr_id++;
 
-                //! Replenish untagged buffer in queue 1
-                ddp_post_recv(ctx->ddp_ctx, READ_QN, &ddp_message.untag_buf, 1);
                 break;
             }
             case rdma_opcode::RDMAP_RDMA_READ_RESP: {
@@ -194,7 +198,6 @@ void* rnic_send(void* ctx_ptr)
     {
         int found = q->try_dequeue(req);
         if (!found) continue;
-        
         rdma_hdr = (1 << 6) | req.opcode;
         switch(req.opcode)
         {
@@ -315,6 +318,7 @@ void* rnic_send(void* ctx_ptr)
             }
             case rdma_opcode::RDMAP_RDMA_READ_RESP: {
                 //! This is from a read request, and NOT from the user
+                lwlog_debug("Sending Read Response");
                 struct ddp_tagged_meta ddp_hdr;
                 ddp_hdr.rsvdULP1 = rdma_hdr;
                 ddp_hdr.tag = htonl(req.wr.rdma.rkey);

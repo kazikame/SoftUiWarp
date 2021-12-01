@@ -278,8 +278,9 @@ int mpa_send(int sockfd, sge* sg_list, int num_sge, int flags)
     lwlog_info("MPA Packet CRC: %d", ntohs(crc));
     
     int ret = sendmsg(sockfd, &msg, 0);
-    // int g;
-    // recv(sockfd, &g, 0, 0);
+    int g;
+    recv(sockfd, &g, 0, 0);
+    lwlog_info("Yay dummy send done");
     return ret;
 }
 
