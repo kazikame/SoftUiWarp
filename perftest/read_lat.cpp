@@ -15,6 +15,12 @@ int read_lat_init(perftest_context *perftest_ctx, uint32_t lstag, struct send_da
     read_wr.opcode = RDMAP_RDMA_READ_REQ;
     read_wr.wr.rdma.rkey = ntohl(sd->stag);
     read_wr.wr.rdma.remote_addr = ntohll(sd->offset);
+    // Fill the client's region with incrementing values.
+    if (perftest_ctx->is_client) {
+        for (int i = 0; i < perftest_ctx->buf_size; i++) {
+            perftest_ctx->buf[i] = (char) i;
+        }
+    }
     return 0;
 }
 
