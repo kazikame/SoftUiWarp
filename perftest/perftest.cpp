@@ -116,7 +116,6 @@ static int create_tcp_connection(struct perftest_context *config) {
         perror("socket");
         goto fail;
     }
-    lwlog_notice("File descriptor %d", sock);
     // Convert the hostname to a sockaddr.
     struct addrinfo hints;
     bzero(&hints, sizeof(hints));
@@ -163,24 +162,14 @@ fail:
     return -1;
 }
 
-#define DEFAULT_PAGE_SIZE 4096
-
-#if !defined(__FreeBSD__)
-static int alloc_hugepage_region(struct perftest_context *c) {
-    // Allocate regions, fingers crossed we get hugepages :]
+static int alloc_buf(struct perftest_context *c) {
+    // Allocate regions.
     c->buf = (char*) mmap(NULL, c->buf_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
     if (c->buf == MAP_FAILED) {
         return -1;
     }
-    // Fill the client's region with incrementing values.
-    if (c->is_client) {
-        for (int i = 0; i < c->buf_size; i++) {
-            c->buf[i] = (char) i;
-        }
-    }
     return 0;
 }
-#endif
 
 static int rdmap_send_data(struct perftest_context *perftest_ctx, void *data, size_t data_len, struct send_wr &wr) {
     wr.sg_list->addr = (uint64_t) data;
@@ -225,7 +214,7 @@ void perftest_run(int argc, char **argv,
     }
 
     // Alloc hugepage buffer.
-    if (alloc_hugepage_region(&perftest_ctx) != 0) {
+    if (alloc_buf(&perftest_ctx) != 0) {
         lwlog_err("Failed to allocate hugepage buffer!");
         return;
     }
@@ -305,25 +294,35 @@ void perftest_run(int argc, char **argv,
     perftest_ctx.ctx = ctx;
 
     int ret;
-    struct send_data sd;
+    struct send_data my_sd;
+    my_sd.offset = (uint64_t) perftest_ctx.buf;
+    my_sd.stag = stag;
+    my_sd.size = perftest_ctx.buf_size;
+    struct send_data their_sd;
     if (perftest_ctx.is_client) {
-        sd.offset = (uint64_t) perftest_ctx.buf;
-        sd.stag = stag;
-        sd.size = perftest_ctx.buf_size;
-
-        if (rdmap_send_data(&perftest_ctx, (void*) &sd, sizeof(struct send_data), send_wr) < 0) {
+        // Send remote_addr and rkey to server.
+        if (rdmap_send_data(&perftest_ctx, (void*) &my_sd, sizeof(struct send_data), send_wr) < 0) {
             lwlog_err("failed to send client info!");
         }
+        // Receive remote_addr and rkey from server.
+        if (rdmap_recv_data(&perftest_ctx, (void*) &their_sd, sizeof(struct send_data), recv_wr) < 0) {
+            lwlog_err("failed to recv server info!");
+        }
+        lwlog_debug("Received addr %p stag %lu and size %lu from server.", (void*)their_sd.offset, their_sd.stag, their_sd.size);
     } else {
         // Receive remote_addr and rkey from client.
-        if (rdmap_recv_data(&perftest_ctx, (void*) &sd, sizeof(struct send_data), recv_wr) < 0) {
+        if (rdmap_recv_data(&perftest_ctx, (void*) &their_sd, sizeof(struct send_data), recv_wr) < 0) {
             lwlog_err("failed to recv client info!");
         }
-        lwlog_debug("Received addr %p stag %lu and size %lu from client.", (void*)sd.offset, sd.stag, sd.size);
+        // Send remote_addr and rkey to server.
+        if (rdmap_send_data(&perftest_ctx, (void*) &my_sd, sizeof(struct send_data), send_wr) < 0) {
+            lwlog_err("failed to send server info!");
+        }
+        lwlog_debug("Received addr %p stag %lu and size %lu from client.", (void*)their_sd.offset, their_sd.stag, their_sd.size);
     }
 
     /* BEGIN BENCHMARKING */
-    if (test_init(&perftest_ctx, stag, &sd)) {
+    if (test_init(&perftest_ctx, stag, &their_sd)) {
         lwlog_err("Test initialization failed!");
         goto cleanup;
     }
