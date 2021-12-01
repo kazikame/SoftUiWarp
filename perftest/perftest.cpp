@@ -137,10 +137,11 @@ int create_tcp_connection(struct perftest_context *config) {
     int sock;
     // Create the socket.
     sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock == -1) {
+    if (sock < 0) {
         perror("socket");
         goto fail;
     }
+    lwlog_notice("File descriptor %d", sock);
     // Convert the hostname to a sockaddr.
     struct addrinfo hints;
     bzero(&hints, sizeof(hints));
@@ -187,13 +188,12 @@ fail:
     return -1;
 }
 
-#define HUGEPAGE_ALIGN  (2*1024*1024)
 #define DEFAULT_PAGE_SIZE 4096
 
 #if !defined(__FreeBSD__)
 int alloc_hugepage_region(struct perftest_context *c) {
     // Allocate regions, fingers crossed we get hugepages :]
-    c->buf = (char*) mmap(NULL, c->buf_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
+    c->buf = (char*) mmap(NULL, c->buf_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
     if (c->buf == MAP_FAILED) {
         return -1;
     }
