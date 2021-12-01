@@ -224,7 +224,15 @@ int main(int argc, char **argv)
     }
     attr.sockfd = sockfd;
     attr.max_pending_read_requests = 10;
-
+    
+    //! Make MPA Connection
+    int ret = mpa_client_connect(sockfd, NULL, 0, NULL);
+    if (ret < 0)
+    {
+        lwlog_err("closing connection");
+        close(sockfd);
+    }
+    
     //! Register Buffers
     struct rdmap_stream_context* ctx = rdmap_init_stream(&attr);
 
@@ -241,14 +249,6 @@ int main(int argc, char **argv)
 
     register_tagged_buffer(ctx->ddp_ctx, &tg_buf);
     __u32 stag = tg_buf.stag.tag;
-
-    //! Make MPA Connection
-    int ret = mpa_client_connect(sockfd, NULL, 0, NULL);
-    if (ret < 0)
-    {
-        lwlog_err("closing connection");
-        close(sockfd);
-    }
 
     //! Make Send Work Request: scatter/gather
     struct send_wr req;
