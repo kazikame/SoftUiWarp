@@ -214,7 +214,7 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
 
     //! Get DDP Control Header
     int ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_CTRL_SIZE);
-    if (unlikely(ret < 0))
+    if (unlikely(ret < DDP_CTRL_SIZE))
     {
         lwlog_err("ddp recv failed %d", ret);
         return ret;
@@ -283,7 +283,7 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
     else
     {
         //! Untagged
-        lwlog_debug("DDP Untagged Header detected");
+        lwlog_debug("DDP Untagged Header detected w/ len %d", mpa_packet.ulpdu_len);
 
         int mpa_payload_len = mpa_packet.ulpdu_len - (DDP_CTRL_SIZE + DDP_UNTAGGED_HDR_SIZE);
         //! Check if remaining length has data

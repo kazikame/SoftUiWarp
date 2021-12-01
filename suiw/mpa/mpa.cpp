@@ -108,7 +108,7 @@ int mpa_recv_rr(int sockfd, struct siw_mpa_info* info)
 
     if (rcvd < sizeof(struct mpa_rr))
     {
-        lwlog_err("mpa_recv_rr: didn't receive enough bytes");
+        lwlog_err("mpa_recv_rr: didn't receive enough bytes %d", rcvd);
         return -1;
     }
 
@@ -191,7 +191,11 @@ int mpa_client_connect(int sockfd, void* pdata_send, __u8 pd_len, void* pdata_re
     memset(&info, 0, sizeof(siw_mpa_info));
     info.pdata = (char*)pdata_recv;
     
-    mpa_recv_rr(sockfd, &info);
+    ret = mpa_recv_rr(sockfd, &info);
+    if (ret < 0)
+    {
+        return ret;
+    }
 
     mpa_protocol_version = __mpa_rr_revision(info.hdr.params.bits);
     return 0;
@@ -274,6 +278,8 @@ int mpa_send(int sockfd, sge* sg_list, int num_sge, int flags)
     lwlog_info("MPA Packet CRC: %d", ntohs(crc));
     
     int ret = sendmsg(sockfd, &msg, 0);
+    // int g;
+    // recv(sockfd, &g, 0, 0);
     return ret;
 }
 
