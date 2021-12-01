@@ -110,6 +110,8 @@ int ddp_send_tagged(struct ddp_stream_context* ctx, struct ddp_tagged_meta* next
             remaining_bytes -= packet_len;
         }
     }
+
+    return 0;
 }
 
 //! TODO: This can be made more efficient by merging multiple sge into a single MPA packet
@@ -163,6 +165,8 @@ int ddp_send_untagged(struct ddp_stream_context* ctx, struct ddp_untagged_meta* 
             remaining_bytes -= packet_len;
         }
     }
+
+    return 0;
 }
 
 void ddp_post_recv(struct ddp_stream_context* ctx, int qn, struct untagged_buffer* bufs, int num_bufs)
