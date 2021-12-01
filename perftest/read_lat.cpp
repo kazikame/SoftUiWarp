@@ -60,6 +60,8 @@ int read_lat_iter(perftest_context *perftest_ctx) {
     return 0;
 }
 
+void read_lat_fini(perftest_context *perftest_ctx, float time_s) {}
+
 int main(int argc, char **argv) {
-    perftest_run(argc, argv, read_lat_init, read_lat_iter);
+    perftest_run(argc, argv, read_lat_init, read_lat_iter, read_lat_fini);
 }

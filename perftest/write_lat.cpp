@@ -94,6 +94,8 @@ int write_lat_iter(perftest_context *perftest_ctx) {
     return 0;
 }
 
+void write_lat_fini(perftest_context *ctx, float time_s) {}
+
 int main(int argc, char **argv) {
-    perftest_run(argc, argv, write_lat_init, write_lat_iter);
+    perftest_run(argc, argv, write_lat_init, write_lat_iter, write_lat_fini);
 }

@@ -51,6 +51,7 @@
 #define DEFAULT_ITERS 1024
 #define DEFAULT_IP "127.0.0.1"
 #define DEFAULT_PORT "9999"
+#define DEFAULT_MAX_REQS 1024
 
 struct perftest_context {
     char *port; 
@@ -58,6 +59,7 @@ struct perftest_context {
     int buf_size;
     char *buf;
     int iters;
+    int max_reqs;
     bool is_client;
     int serverfd;
     int huge_shmid;
@@ -72,6 +74,7 @@ struct send_data {
 
 void perftest_run(int argc, char **argv, 
                   int (*test_init)(perftest_context*, uint32_t, struct send_data*), 
-                  int (*test_iter)(perftest_context*));
+                  int (*test_iter)(perftest_context*),
+                  void (*test_fini)(perftest_context*, float));
 
 #endif // PERFTEST_H

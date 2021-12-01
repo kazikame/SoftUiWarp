@@ -62,7 +62,8 @@ static int argparse(int argc, char **argv, struct perftest_context *c) {
     c->ip = (char*) DEFAULT_IP;
     c->port = (char*) DEFAULT_PORT;
     c->is_client = false;
-    while ((opt = getopt(argc, argv, "p:s:b:i:c")) != -1) {
+    c->max_reqs = DEFAULT_MAX_REQS;
+    while ((opt = getopt(argc, argv, "p:s:b:i:r:c")) != -1) {
         switch (opt) {
           case 's':
             c->ip = optarg;
@@ -78,6 +79,9 @@ static int argparse(int argc, char **argv, struct perftest_context *c) {
             break;
           case 'c':
             c->is_client = true;
+            break;
+          case 'r':
+            c->max_reqs = atoi(optarg);
             break;
           case '?':
             if (optopt == 'c') {
@@ -204,7 +208,8 @@ static int rdmap_recv_data(struct perftest_context *perftest_ctx, void *buf, siz
 
 void perftest_run(int argc, char **argv, 
                   int (*test_init)(perftest_context*, uint32_t, struct send_data*),
-                  int (*test_iter)(perftest_context*))
+                  int (*test_iter)(perftest_context*),
+                  void (*test_fini)(perftest_context*, float))
 {
     //! Parse arguments.
     struct perftest_context perftest_ctx;
@@ -224,13 +229,13 @@ void perftest_run(int argc, char **argv,
     pd.pd_id = 1;
 
     //! Create CQ
-    struct cq* cq = create_cq(NULL, 10);
+    struct cq* cq = create_cq(NULL, perftest_ctx.max_reqs);
 
     //! Create SQ/RQ
     struct wq_init_attr wq_attr;
     wq_attr.wq_type = wq_type::WQT_SQ;
-    wq_attr.max_wr = 10;
-    wq_attr.max_sge = 10;
+    wq_attr.max_wr = perftest_ctx.max_reqs;
+    wq_attr.max_sge = perftest_ctx.max_reqs;
     wq_attr.pd = &pd;
     wq_attr.cq = cq;
 
@@ -251,7 +256,7 @@ void perftest_run(int argc, char **argv,
         return;
     }
     attr.sockfd = sockfd;
-    attr.max_pending_read_requests = 10;
+    attr.max_pending_read_requests = perftest_ctx.max_reqs;
 
     // MPA connection.
     if (perftest_ctx.is_client) {
@@ -348,9 +353,13 @@ void perftest_run(int argc, char **argv,
     }
 
     // Print results.
+    float time_s;
     lwlog_notice("Completed test!");
-    lwlog_notice("Total Time (s): %f", (total_ns/(1000.0 * 1000.0 * 1000.0)));
+    time_s = (total_ns/(1000.0 * 1000.0 * 1000.0));
+    lwlog_notice("Total Time (s): %f", time_s);
     lwlog_notice("Time per iteration (us): %f", (total_ns/1000.0/perftest_ctx.iters));
+
+    test_fini(&perftest_ctx, time_s);
 
     // Cleanup.
 cleanup:

@@ -10,3 +10,8 @@ add_executable (write_lat
 )
 target_link_libraries (write_lat LINK_PRIVATE suiw)
 
+add_executable (read_bw 
+    perftest.cpp
+    read_bw.cpp
+)
+target_link_libraries (read_bw LINK_PRIVATE suiw)
