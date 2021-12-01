@@ -93,22 +93,22 @@ void* rnic_recv(void* ctx_ptr)
                 read_req = (struct rdmap_read_req_fields*) ddp_message.untag_buf.data;
 
                 //! Get the corresponding tagged buffer
-                lwlog_debug("Read Req Fields %u 0x%lx %u %u 0x%lx", ntohl(read_req->sink_tag),
-                                                                ntohll(read_req->sink_TO),
-                                                                ntohl(read_req->rdma_rd_sz),
-                                                                ntohl(read_req->src_tag),
-                                                                ntohll(read_req->src_TO));
-                auto it = ctx->ddp_ctx->tagged_buffers.find(ntohl(read_req->src_tag));
+                lwlog_debug("Read Req Fields %u 0x%llx %u %u 0x%llx", read_req->sink_tag,
+                                                                read_req->sink_TO,
+                                                                read_req->rdma_rd_sz,
+                                                                read_req->src_tag,
+                                                                read_req->src_TO);
+                auto it = ctx->ddp_ctx->tagged_buffers.find(read_req->src_tag);
                 if (unlikely(it == ctx->ddp_ctx->tagged_buffers.end()))
                 {
-                    lwlog_err("Read request for stag %u not found", ntohl(read_req->src_tag));
+                    lwlog_err("Read request for stag %u not found", read_req->src_tag);
                 }
-                sg.addr = ntohll(read_req->src_TO);
-                sg.lkey = ntohl(read_req->src_tag);
-                sg.length = ntohl(read_req->rdma_rd_sz);
+                sg.addr = read_req->src_TO;
+                sg.lkey = read_req->src_tag;
+                sg.length = read_req->rdma_rd_sz;
 
-                read_resp.wr.rdma.rkey = ntohl(read_req->sink_tag);
-                read_resp.wr.rdma.remote_addr = ntohll(read_req->sink_TO);
+                read_resp.wr.rdma.rkey = read_req->sink_tag;
+                read_resp.wr.rdma.remote_addr = read_req->sink_TO;
                 
                 sq->enqueue(read_resp);
                 read_resp.wr_id++;
@@ -136,7 +136,7 @@ void* rnic_recv(void* ctx_ptr)
             case rdma_opcode::RDMAP_SEND_INVAL: {
                 //! TODO: Handle Invalidation
                 struct stag_t stag;
-                stag.tag = ntohl(ddp_message.tagged_metadata.rsvdULP1);
+                stag.tag = ddp_message.tagged_metadata.rsvdULP1;
                 int erased = rdma_invalidate(ctx, &stag);
                 if (erased <= 0)
                 {

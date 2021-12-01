@@ -1,24 +1,23 @@
 #include "perftest.h"
 #include "rdmap/rdmap.h"
 
+#include <x86intrin.h>
+
 struct sge write_sg;
 struct send_wr write_wr;
 
 int write_lat_init(perftest_context *perftest_ctx, uint32_t lstag, struct send_data *sd) {
     // Build read WR.
-    write_sg.addr = ntohll((uint64_t) perftest_ctx->buf);
-    write_sg.length = ntohl(perftest_ctx->buf_size);
-    write_sg.lkey = ntohl(lstag);
+    write_sg.addr = (uint64_t) perftest_ctx->buf;
+    write_sg.length = perftest_ctx->buf_size;
+    write_sg.lkey = lstag;
     write_wr.wr_id = 2;
     write_wr.sg_list = &write_sg;
     write_wr.num_sge = 1;
     write_wr.opcode = RDMAP_RDMA_WRITE;
-    write_wr.wr.rdma.rkey = ntohl(sd->stag);
-    write_wr.wr.rdma.remote_addr = ntohll(sd->offset);
-    if (perftest_ctx->is_client) {
-        // Wipe client buffer.
-        memset(perftest_ctx->buf, 0, perftest_ctx->buf_size);
-    } else {
+    write_wr.wr.rdma.rkey = sd->stag;
+    write_wr.wr.rdma.remote_addr = sd->offset;
+    if (!perftest_ctx->is_client) {
         // Fill the server's region with incrementing values.
         for (int i = 0; i < perftest_ctx->buf_size; i++) {
             perftest_ctx->buf[i] = (char) i;
@@ -31,8 +30,16 @@ int write_lat_iter(perftest_context *perftest_ctx) {
     int ret;
     // Client clears buffer and waits to receive write.
     if (perftest_ctx->is_client) {
+#ifdef PERFTEST_TEST
+        // Clear the whole buffer if we're testing.
         memset(perftest_ctx->buf, 0, perftest_ctx->buf_size);
-        do {} while (perftest_ctx->buf[1] == 0) ;
+#else
+        // Only clear a byte if we're benchmarking.
+        perftest_ctx->buf[1] = (char) 0;
+#endif
+        lwlog_debug("waiting for write at ...");
+        do { _mm_clflush(&perftest_ctx->buf); } while (perftest_ctx->buf[1] == 0) ;
+        lwlog_debug("found write!");
 #ifdef PERFTEST_TEST
         for (int i = 0; i < perftest_ctx->buf_size; i++) {
             if (perftest_ctx->buf[i] != ((char) i)) {
@@ -44,6 +51,7 @@ int write_lat_iter(perftest_context *perftest_ctx) {
     }
 
     // Write the buffer to the remote.
+    lwlog_debug("issuing write ...");
     ret = rdmap_write(perftest_ctx->ctx, write_wr);
     if (ret < 0) {
         lwlog_err("Failed to issue RDMA Write!");
@@ -64,8 +72,16 @@ int write_lat_iter(perftest_context *perftest_ctx) {
 
     // Server clears buffer and waits to receive write.
     if (!perftest_ctx->is_client) {
+#ifdef PERFTEST_TEST
+        // Clear the whole buffer if we're testing.
         memset(perftest_ctx->buf, 0, perftest_ctx->buf_size);
-        do {} while (perftest_ctx->buf[1] == 0) ;
+#else
+        // Only clear a byte if we're benchmarking.
+        perftest_ctx->buf[1] = (char) 0;
+#endif
+        lwlog_debug("waiting for write ...");
+        do { _mm_clflush(&perftest_ctx->buf); } while (perftest_ctx->buf[1] == 0) ;
+        lwlog_debug("found write!");
 #ifdef PERFTEST_TEST
         for (int i = 0; i < perftest_ctx->buf_size; i++) {
             if (perftest_ctx->buf[i] != ((char) i)) {

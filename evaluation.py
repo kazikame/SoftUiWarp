@@ -4,14 +4,14 @@ import re
 import sys
 
 # Performance test configuration.
-iface = 'rxe0'
+iface = 'siw_enp94s0f0'
 iterations = 10000
 is_client = True
 server_addr = '10.10.1.2'
 max_msg_size_log2 = 16
 
 # Base command to run.
-base_cmd = '{binary} -d {iface} -n {iterations} -s {msg_size}'
+base_cmd = '{binary} -d {iface} -n {iterations} -s {msg_size} -R'
 if is_client:
     base_cmd += ' ' + server_addr
 

@@ -296,7 +296,6 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
         //! Get remaining header
         mpa_packet.ulpdu = (char*) &msg->untagged_metadata;
 
-        lwlog_debug("getting remaining header");
         ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_UNTAGGED_HDR_SIZE);
         if (unlikely(ret < 0))
         {
@@ -328,7 +327,6 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
         {
             //! Copy current payload to the right path
             mpa_packet.ulpdu = (char *) ((uint64_t)msg->untag_buf.data + msg->untagged_metadata.mo);
-            lwlog_debug("getting first header");
             ret = mpa_recv(ctx->sockfd, &mpa_packet, mpa_payload_len);
             ddp_payload_len += mpa_payload_len;
             if (unlikely(ret < 0)) return -1;
@@ -338,7 +336,6 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
 
             //! Get next header
             mpa_packet.ulpdu = (char *) msg;
-            lwlog_debug("getting next header");
             ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_CTRL_SIZE + DDP_UNTAGGED_HDR_SIZE);
             if (unlikely(ret < 0)) return -1;
             mpa_payload_len = mpa_packet.ulpdu_len - (DDP_CTRL_SIZE + DDP_UNTAGGED_HDR_SIZE);

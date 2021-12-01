@@ -6,15 +6,15 @@ struct send_wr read_wr;
 
 int read_lat_init(perftest_context *perftest_ctx, uint32_t lstag, struct send_data *sd) {
     // Build read WR.
-    read_sg.addr = ntohll((uint64_t) perftest_ctx->buf);
-    read_sg.length = ntohl(perftest_ctx->buf_size);
-    read_sg.lkey = ntohl(lstag);
+    read_sg.addr = (uint64_t) perftest_ctx->buf;
+    read_sg.length = perftest_ctx->buf_size;
+    read_sg.lkey = lstag;
     read_wr.wr_id = 2;
     read_wr.sg_list = &read_sg;
     read_wr.num_sge = 1;
     read_wr.opcode = RDMAP_RDMA_READ_REQ;
-    read_wr.wr.rdma.rkey = ntohl(sd->stag);
-    read_wr.wr.rdma.remote_addr = ntohll(sd->offset);
+    read_wr.wr.rdma.rkey = sd->stag;
+    read_wr.wr.rdma.remote_addr = sd->offset;
     // Fill the client's region with incrementing values.
     if (perftest_ctx->is_client) {
         for (int i = 0; i < perftest_ctx->buf_size; i++) {
