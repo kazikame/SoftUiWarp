@@ -114,8 +114,10 @@ void* rnic_recv(void* ctx_ptr)
                 read_resp.wr.rdma.remote_addr = ntohll(read_req->sink_TO);
                 
                 lwlog_debug("Posting Read response to SQ");
-                while(!sq->enqueue(read_resp)) {
+                int pushed = sq->enqueue(read_resp);
+                while(unlikely(!pushed)) {
                     lwlog_debug("Posting failed???");
+                    pushed = sq->enqueue(read_resp);
                 };
                 read_resp.wr_id++;
 
