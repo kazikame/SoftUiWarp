@@ -7,7 +7,7 @@ struct sge write_sg;
 struct send_wr write_wr;
 
 int write_lat_init(perftest_context *perftest_ctx, uint32_t lstag, struct send_data *sd) {
-    // Build read WR.
+    // Build write WR.
     write_sg.addr = (uint64_t) perftest_ctx->buf;
     write_sg.length = perftest_ctx->buf_size;
     write_sg.lkey = lstag;

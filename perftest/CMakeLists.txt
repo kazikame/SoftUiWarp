@@ -18,3 +18,10 @@ add_executable (read_bw
 )
 target_link_libraries (read_bw LINK_PRIVATE suiw)
 set_property(TARGET read_bw PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+
+add_executable (write_bw
+    perftest.cpp
+    write_bw.cpp
+)
+target_link_libraries (write_bw LINK_PRIVATE suiw)
+set_property(TARGET write_bw PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
