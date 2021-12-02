@@ -203,10 +203,12 @@ static int rdmap_recv_ack(struct perftest_context *perftest_ctx) {
     lwlog_debug("Received send data with id %lu", wc.wr_id);
     if (wc.status != WC_SUCCESS) {
         lwlog_err("Received remote send with error");
+        return -1;
     } else if (wc.opcode != WC_SEND) {
         lwlog_err("Received wrong message type!");
+        return -1;
     }
-    return ret;
+    return 0;
 }
 
 void perftest_run(int argc, char **argv, 
@@ -226,6 +228,10 @@ void perftest_run(int argc, char **argv,
         lwlog_err("Failed to allocate hugepage buffer!");
         return;
     }
+
+    // Timing information.
+    uint64_t start_ns, end_ns, total_ns;
+    total_ns = 0;
 
     //! Protection Domain
     struct pd_t pd;
@@ -314,6 +320,9 @@ void perftest_run(int argc, char **argv,
         if (rdmap_recv_issue(&perftest_ctx, (void*) &their_sd, sizeof(struct send_data), recv_wr) < 0) {
             lwlog_err("failed to issue recv for server info!");
         }
+        if (rdmap_recv_issue(&perftest_ctx, (void*)&total_ns, sizeof(uint64_t), recv_wr)) {
+            lwlog_err("failed to issue recv for server completion!");
+        }
         // Send remote_addr and rkey to server.
         if (rdmap_send_data(&perftest_ctx, (void*) &my_sd, sizeof(struct send_data), send_wr) < 0) {
             lwlog_err("failed to send client info!");
@@ -344,8 +353,6 @@ void perftest_run(int argc, char **argv,
         lwlog_err("Test initialization failed!");
         goto cleanup;
     }
-    uint64_t start_ns, end_ns, total_ns;
-    total_ns = 0;
     for (int iter = 0; iter < perftest_ctx.iters; iter++) {
         start_ns = get_nanos();
         lwlog_debug("iter: %d", iter);
@@ -361,7 +368,6 @@ void perftest_run(int argc, char **argv,
 
     if (perftest_ctx.is_client) {
         lwlog_info("Waiting for server finished notification ...");
-        rdmap_recv_issue(&perftest_ctx, (void*)&total_ns, sizeof(uint64_t), recv_wr);
         rdmap_recv_ack(&perftest_ctx);
     } else {
         send_wr.wr_id = 234;
