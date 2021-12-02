@@ -24,4 +24,4 @@ target_link_libraries(fake_ping_client PRIVATE Threads::Threads)
 target_link_libraries (fake_ping_client LINK_PRIVATE suiw)
 
 set(CMAKE_CXX_FLAGS_DEBUG_INIT "-ggdb")
-set(CMAKE_CXX_FLAGS_RELEASE_INIT "-O3 -march=native")
+set(CMAKE_CXX_FLAGS_RELEASE_INIT "-Ofast -march=native")

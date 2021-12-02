@@ -239,7 +239,7 @@ int mpa_send(int sockfd, sge* sg_list, int num_sge, int flags)
         len += sg_list[i].length;
     }
 
-    if (len > EMSS) 
+    if (unlikely(len > EMSS)) 
     {
         lwlog_err("Sending MPA packet larger than EMSS: %d", len);
         return -1;
@@ -259,7 +259,6 @@ int mpa_send(int sockfd, sge* sg_list, int num_sge, int flags)
         iov[iovec_num].iov_len = sg_list[i].length;
         iovec_num++;
     }
-
 
     //! Padding
     int padding_bytes = (len + sizeof(mpa_len)) % 4;
@@ -320,7 +319,7 @@ int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes)
     int packet_len = info->ulpdu_len;
     
 
-    if (packet_len <= 0)
+    if (unlikely(packet_len <= 0))
     {
         lwlog_err("mpa_recv: packet header is %d", packet_len);
         return -2;
@@ -341,11 +340,11 @@ int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes)
     
     rcvd = 0;
     int tries = 0;
-    while (rcvd < num_bytes_to_read) {
+    do {
         rcvd += recv(sockfd, ((char*)info->ulpdu)+rcvd, num_bytes_to_read-rcvd, 0);
-    }
+    } while (rcvd < num_bytes_to_read);
 
-    if (rcvd != num_bytes_to_read)
+    if (unlikely(rcvd != num_bytes_to_read))
     {
         lwlog_err("mpa_recv: didn't receive enough bytes after header (%d)", rcvd);
         return -1;
@@ -358,7 +357,7 @@ int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes)
         //! Get padding
         int padding_len = (packet_len + MPA_HDR_SIZE) % 4;
         rcvd = recv(sockfd, &info->crc, padding_len, 0);
-        if (rcvd < padding_len)
+        if (unlikely(rcvd < padding_len))
         {
             lwlog_err("mpa_recv: didn't receive enough bytes for padding (%d)", rcvd);
             return -1;
@@ -367,7 +366,7 @@ int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes)
 
         //! Get crc
         rcvd = recv(sockfd, &info->crc, MPA_CRC_SIZE, 0);
-        if (rcvd != MPA_CRC_SIZE)
+        if (unlikely(rcvd != MPA_CRC_SIZE))
         {
             lwlog_err("mpa_recv: didn't receive enough bytes for crc (%d)", rcvd);
             return -1;
