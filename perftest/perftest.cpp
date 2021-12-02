@@ -187,11 +187,14 @@ static int rdmap_send_data(struct perftest_context *perftest_ctx, void *data, si
     return ret;
 }
 
-static int rdmap_recv_data(struct perftest_context *perftest_ctx, void *buf, size_t buf_len, struct recv_wr &wr) {
+static int rdmap_recv_issue(struct perftest_context *perftest_ctx, void *buf, size_t buf_len, struct recv_wr &wr) {
     // Prepare the WR.
     wr.sg_list->addr = (uint64_t) buf;
     wr.sg_list->length = buf_len;
-    rdma_post_recv(perftest_ctx->ctx, wr);
+    return rdma_post_recv(perftest_ctx->ctx, wr);
+}
+
+static int rdmap_recv_ack(struct perftest_context *perftest_ctx) {
     // Poll the receive completion queue.
     int ret;
     struct work_completion wc;
@@ -307,23 +310,31 @@ void perftest_run(int argc, char **argv,
     my_sd.size = perftest_ctx.buf_size;
     struct send_data their_sd;
     if (perftest_ctx.is_client) {
+        // Receive remote_addr and rkey from server.
+        if (rdmap_recv_issue(&perftest_ctx, (void*) &their_sd, sizeof(struct send_data), recv_wr) < 0) {
+            lwlog_err("failed to issue recv for server info!");
+        }
         // Send remote_addr and rkey to server.
         if (rdmap_send_data(&perftest_ctx, (void*) &my_sd, sizeof(struct send_data), send_wr) < 0) {
             lwlog_err("failed to send client info!");
         }
-        // Receive remote_addr and rkey from server.
-        if (rdmap_recv_data(&perftest_ctx, (void*) &their_sd, sizeof(struct send_data), recv_wr) < 0) {
+        // Complete recv.
+        if (rdmap_recv_ack(&perftest_ctx)) {
             lwlog_err("failed to recv server info!");
         }
         lwlog_debug("Received addr %p stag %lu and size %lu from server.", (void*)their_sd.offset, their_sd.stag, their_sd.size);
     } else {
         // Receive remote_addr and rkey from client.
-        if (rdmap_recv_data(&perftest_ctx, (void*) &their_sd, sizeof(struct send_data), recv_wr) < 0) {
-            lwlog_err("failed to recv client info!");
+        if (rdmap_recv_issue(&perftest_ctx, (void*) &their_sd, sizeof(struct send_data), recv_wr) < 0) {
+            lwlog_err("failed to issue recv for client info!");
         }
         // Send remote_addr and rkey to server.
         if (rdmap_send_data(&perftest_ctx, (void*) &my_sd, sizeof(struct send_data), send_wr) < 0) {
             lwlog_err("failed to send server info!");
+        }
+        // Complete recv.
+        if (rdmap_recv_ack(&perftest_ctx)) {
+            lwlog_err("failed to recv client info!");
         }
         lwlog_debug("Received addr %p stag %lu and size %lu from client.", (void*)their_sd.offset, their_sd.stag, their_sd.size);
     }
@@ -350,7 +361,8 @@ void perftest_run(int argc, char **argv,
 
     if (perftest_ctx.is_client) {
         lwlog_info("Waiting for server finished notification ...");
-        rdmap_recv_data(&perftest_ctx, (void*)&total_ns, sizeof(uint64_t), recv_wr);
+        rdmap_recv_issue(&perftest_ctx, (void*)&total_ns, sizeof(uint64_t), recv_wr);
+        rdmap_recv_ack(&perftest_ctx);
     } else {
         send_wr.wr_id = 234;
         lwlog_info("Finished benchmarking, notifying client.");
