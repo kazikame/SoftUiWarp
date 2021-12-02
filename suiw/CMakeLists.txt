@@ -14,3 +14,4 @@ target_link_libraries(suiw PRIVATE Threads::Threads)
 
 target_include_directories (suiw PUBLIC ../common/)
 target_include_directories (suiw PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+set_property(TARGET suiw PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)

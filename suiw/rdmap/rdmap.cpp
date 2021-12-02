@@ -112,8 +112,6 @@ void* rnic_recv(void* ctx_ptr)
                 {
                     lwlog_err("Read request for stag %u not found", read_req->src_tag);
                 }
-                //! Replenish untagged buffer in queue 1
-                ddp_post_recv(ctx->ddp_ctx, READ_QN, &ddp_message.untag_buf, 1);
 
                 sg.addr = read_req->src_TO;
                 sg.lkey = read_req->src_tag;
@@ -129,7 +127,9 @@ void* rnic_recv(void* ctx_ptr)
                     pushed = sq->enqueue(read_resp);
                 };
                 read_resp.wr_id++;
-
+                
+                //! Replenish untagged buffer in queue 1
+                ddp_post_recv(ctx->ddp_ctx, READ_QN, &ddp_message.untag_buf, 1);
                 break;
             }
             case rdma_opcode::RDMAP_RDMA_READ_RESP: {

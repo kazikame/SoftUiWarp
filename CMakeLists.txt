@@ -25,3 +25,4 @@ target_link_libraries (fake_ping_client LINK_PRIVATE suiw)
 
 set(CMAKE_CXX_FLAGS_DEBUG_INIT "-ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE_INIT "-Ofast -march=native")
+set_property(TARGET fake_ping_client PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
