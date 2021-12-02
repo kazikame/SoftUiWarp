@@ -94,6 +94,12 @@ int mpa_send_rr(int sockfd, const void* pdata, __u8 pd_len, int req)
     lwlog_info("Sending Message:\n%s", log_buf);
 
     int ret = sendmsg(sockfd, &msg, 0);
+#ifdef USE_TAS
+    int g;
+    lwlog_debug("doing dummy recv ...");
+    recv(sockfd, &g, 0, 0);
+    lwlog_debug("Yay dummy recv done");
+#endif // USE_TAS
     return ret;
 }
 
@@ -122,9 +128,10 @@ int mpa_recv_rr(int sockfd, struct siw_mpa_info* info)
     if (!pd_len)
     {
         //! If received request, ensure no garbage data is sent
+#ifndef USE_TAS // TAS does not support the MSG_DONTWAIT flag, so just assume the client is protocol compliant
         if (is_req)
         {
-             int garbage;
+            int garbage;
             rcvd = recv(sockfd, (char *)&garbage, sizeof(garbage), MSG_DONTWAIT);
 
             //! No data on socket, the peer is protocol compliant :)
@@ -148,6 +155,7 @@ int mpa_recv_rr(int sockfd, struct siw_mpa_info* info)
                 return -EPIPE;
             }
         }
+#endif // !USE_TAS
 
         return sizeof(struct mpa_rr);
     }
@@ -163,7 +171,6 @@ int mpa_recv_rr(int sockfd, struct siw_mpa_info* info)
             return -ENOMEM;
         }
     }
-
 
     rcvd = recv(sockfd, info->pdata, is_req ? pd_len + 4 : pd_len, MSG_DONTWAIT);
 
@@ -274,14 +281,15 @@ int mpa_send(int sockfd, sge* sg_list, int num_sge, int flags)
 
     msg.msg_iov = iov;
     msg.msg_iovlen = iovec_num;
-    lwlog_info("MPA Packet Header: %d", ntohs(mpa_len));
-    lwlog_info("MPA Packet CRC: %d", ntohs(crc));
+    lwlog_debug("MPA Packet Header: %d", ntohs(mpa_len));
+    lwlog_debug("MPA Packet CRC: %d", ntohs(crc));
     
     int ret = sendmsg(sockfd, &msg, 0);
 #ifdef USE_TAS
     int g;
+    lwlog_debug("doing dummy recv ...");
     recv(sockfd, &g, 0, 0);
-    lwlog_info("Yay dummy send done");
+    lwlog_debug("Yay dummy recv done");
 #endif // USE_TAS
     return ret;
 }
@@ -296,6 +304,7 @@ int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes)
         int bytes_rcvd = info->bytes_rcvd;
 
         //! Get header
+        lwlog_debug("receiving %u bytes", MPA_HDR_SIZE - bytes_rcvd);
         rcvd = recv(sockfd, (char*)&info->ulpdu_len + (uint)bytes_rcvd, MPA_HDR_SIZE - bytes_rcvd, 0);
 
         if (rcvd < MPA_HDR_SIZE - bytes_rcvd)

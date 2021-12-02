@@ -71,6 +71,7 @@ void* rnic_recv(void* ctx_ptr)
     read_resp.num_sge = 1;
     while(ctx->connected)
     {
+        lwlog_debug("rnic_recv");
         int ret = ddp_recv(ctx->ddp_ctx, &ddp_message);
         if (unlikely(ret < 0))
         {
@@ -91,6 +92,14 @@ void* rnic_recv(void* ctx_ptr)
                 assert(!ddp_is_tagged(ddp_message.hdr.bits));
                 // handle w/o letting the client know
                 read_req = (struct rdmap_read_req_fields*) ddp_message.untag_buf.data;
+#ifdef RPING
+                // byte swizzle
+                read_req->sink_tag = ntohl(read_req->sink_tag);
+                read_req->sink_TO = ntohll(read_req->sink_TO);
+                read_req->rdma_rd_sz = ntohl(read_req->rdma_rd_sz);
+                read_req->src_tag = ntohl(read_req->src_tag);
+                read_req->src_TO = ntohll(read_req->src_TO);
+#endif
 
                 //! Get the corresponding tagged buffer
                 lwlog_debug("Read Req Fields %u 0x%llx %u %u 0x%llx", read_req->sink_tag,

@@ -50,6 +50,10 @@
 
 // Uncomment to compile TAS workarounds.
 //#define USE_TAS
+// Uncomment to build working rping.
+// (this is necessary because the real softiwarp stack expects a certain byte-order
+// convention, that would take some time to do correctly without breaking things)
+//#define RPING
 
 #define RDMAP_VERSION		1
 #define DDP_VERSION		1
