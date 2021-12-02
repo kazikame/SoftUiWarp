@@ -15,3 +15,9 @@ add_executable (read_bw
     read_bw.cpp
 )
 target_link_libraries (read_bw LINK_PRIVATE suiw)
+
+add_executable (write_bw
+    perftest.cpp
+    write_bw.cpp
+)
+target_link_libraries (write_bw LINK_PRIVATE suiw)

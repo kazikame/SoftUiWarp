@@ -238,13 +238,13 @@ void perftest_run(int argc, char **argv,
     pd.pd_id = 1;
 
     //! Create CQ
-    struct cq* cq = create_cq(NULL, perftest_ctx.max_reqs);
+    struct cq* cq = create_cq(NULL, perftest_ctx.max_reqs+2);
 
     //! Create SQ/RQ
     struct wq_init_attr wq_attr;
     wq_attr.wq_type = wq_type::WQT_SQ;
-    wq_attr.max_wr = perftest_ctx.max_reqs;
-    wq_attr.max_sge = perftest_ctx.max_reqs;
+    wq_attr.max_wr = perftest_ctx.max_reqs + 2;
+    wq_attr.max_sge = perftest_ctx.max_reqs + 2;
     wq_attr.pd = &pd;
     wq_attr.cq = cq;
 
@@ -267,7 +267,7 @@ void perftest_run(int argc, char **argv,
     int flag = 1;
     setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
     attr.sockfd = sockfd;
-    attr.max_pending_read_requests = perftest_ctx.max_reqs;
+    attr.max_pending_read_requests = perftest_ctx.max_reqs + 2;
 
     // MPA connection.
     if (perftest_ctx.is_client) {
