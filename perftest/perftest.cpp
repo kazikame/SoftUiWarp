@@ -255,6 +255,8 @@ void perftest_run(int argc, char **argv,
         lwlog_err("cannot create socket");
         return;
     }
+    int flag = 1;
+    setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
     attr.sockfd = sockfd;
     attr.max_pending_read_requests = perftest_ctx.max_reqs;
 
@@ -332,16 +334,19 @@ void perftest_run(int argc, char **argv,
         goto cleanup;
     }
     uint64_t start_ns, end_ns, total_ns;
-    start_ns = get_nanos();
+    total_ns = 0;
     for (int iter = 0; iter < perftest_ctx.iters; iter++) {
+        start_ns = get_nanos();
         lwlog_debug("iter: %d", iter);
         if (test_iter(&perftest_ctx)) {
             lwlog_err("Test iteration failed!");
             goto cleanup;
         }
+        end_ns = get_nanos();
+        lwlog_notice("iter time: %lu", end_ns-start_ns);
+        total_ns += (end_ns - start_ns);
     }
-    end_ns = get_nanos();
-    total_ns = end_ns - start_ns;
+    lwlog_notice("total_ns: %lu", total_ns);
 
     if (perftest_ctx.is_client) {
         lwlog_info("Waiting for server finished notification ...");
@@ -357,7 +362,7 @@ void perftest_run(int argc, char **argv,
     lwlog_notice("Completed test!");
     time_s = (total_ns/(1000.0 * 1000.0 * 1000.0));
     lwlog_notice("Total Time (s): %f", time_s);
-    lwlog_notice("Time per iteration (us): %f", (total_ns/1000.0/perftest_ctx.iters));
+    lwlog_notice("Time per iteration (us): %f", (total_ns/1000.0/(perftest_ctx.iters)));
 
     test_fini(&perftest_ctx, time_s);
 

@@ -330,9 +330,13 @@ int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes)
         read_trailers = 1;
     }
     
-    rcvd = recv(sockfd, info->ulpdu, num_bytes_to_read, 0);
+    rcvd = 0;
+    int tries = 0;
+    while (rcvd < num_bytes_to_read) {
+        rcvd += recv(sockfd, ((char*)info->ulpdu)+rcvd, num_bytes_to_read-rcvd, 0);
+    }
 
-    if (rcvd < num_bytes_to_read)
+    if (rcvd != num_bytes_to_read)
     {
         lwlog_err("mpa_recv: didn't receive enough bytes after header (%d)", rcvd);
         return -1;
