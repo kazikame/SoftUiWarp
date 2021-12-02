@@ -4,18 +4,13 @@
 struct sge read_sg;
 struct send_wr read_wr;
 
-struct sge *read_sgs;
-
 int read_bw_init(perftest_context *perftest_ctx, uint32_t lstag, struct send_data *sd) {
     // Build read WR.
-    read_sgs = (struct sge*) malloc(sizeof(struct sge)*perftest_ctx->max_reqs);
-    for (int i = 0; i < perftest_ctx->max_reqs; i++) {
-        read_sgs[i].addr = (uint64_t) perftest_ctx->buf;
-        read_sgs[i].length = perftest_ctx->buf_size;
-        read_sgs[i].lkey = lstag;
-    }
+    read_sg.addr = (uint64_t) perftest_ctx->buf;
+    read_sg.length = perftest_ctx->buf_size;
+    read_sg.lkey = lstag;
     read_wr.wr_id = 2;
-    read_wr.sg_list = read_sgs;
+    read_wr.sg_list = &read_sg;
     read_wr.num_sge = 1;
     read_wr.opcode = RDMAP_RDMA_READ_REQ;
     read_wr.wr.rdma.rkey = sd->stag;
@@ -76,7 +71,6 @@ void read_bw_fini(perftest_context *perftest_ctx, float time_s) {
     float MBps = (num_requests * perftest_ctx->buf_size) / (time_s * 1000.0 * 1000.0);
     lwlog_notice("Message rate (Mp/s): %f", Mpps);
     lwlog_notice("Bandwidth (MB/s): %f", MBps);
-    free(read_sgs);
 }
 
 int main(int argc, char **argv) {
