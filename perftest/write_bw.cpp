@@ -54,41 +54,52 @@ int write_bw_init(perftest_context *perftest_ctx, uint32_t lstag, struct send_da
     write_sg_end.length = 1;
     write_wr_end.wr_id = 0xffffffff;
     write_wr.sg_list = &write_sg_end;
-    if (!perftest_ctx->is_client) {
-        // Fill the server's region with incrementing values.
+    if (perftest_ctx->is_client) {
+        // Fill the buffer with incrementing values.
         for (int i = 0; i < perftest_ctx->buf_size; i++) {
             perftest_ctx->buf[i] = (char) i;
         }
+    } else {
+        memset(perftest_ctx->buf, 0, perftest_ctx->buf_size);
     }
     return 0;
 }
 
 int write_bw_iter(perftest_context *perftest_ctx) {
-    // Client clears buffer and waits for writes.
-    if (perftest_ctx->is_client) {
-        perftest_ctx->buf[0] = (char) 0;
-        lwlog_debug("waiting for write ...");
-        do { _mm_clflush(perftest_ctx->buf); } while (perftest_ctx->buf[0] == 0) ;
-        lwlog_debug("found write!");
-        perftest_ctx->buf[0] = 0;
-    }
-
-    // Issue all the large writes.
     int ret;
-    for (int i = 0; i < perftest_ctx->max_reqs; i++) {
-        ret = rdmap_write(perftest_ctx->ctx, write_wr);
-        write_wr.wr_id++;
-        if (ret < 0) {
-            lwlog_err("Failed to issue RDMA WRITE!");
-            return -1;
+    if (!perftest_ctx->is_client) {
+        lwlog_debug("waiting for write ...");
+        do { _mm_clflush(&perftest_ctx->buf[0]); } while (perftest_ctx->buf[0] == 0) ;
+        lwlog_debug("found write!");
+        // Only clear a byte if we're benchmarking.
+        perftest_ctx->buf[0] = (char) 0;
+    } else {
+        // Write the buffer to the remote.
+        lwlog_debug("issuing writes ...");
+        for (int i = 0; i < perftest_ctx->max_reqs; i++) {
+            ret = rdmap_write(perftest_ctx->ctx, write_wr);
+            if (ret < 0) {
+                lwlog_err("Failed to issue RDMA Write!");
+                return -1;
+            }
         }
-    }
-    lwlog_debug("completed writes");
-    struct work_completion wc;
-    auto write_cq = perftest_ctx->ctx->send_q->cq->q;
-    for (int i = 0; i < perftest_ctx->max_reqs; i++) {
+        lwlog_debug("completed writes");
+        struct work_completion wc;
+        auto write_cq = perftest_ctx->ctx->send_q->cq->q;
+        for (int i = 0; i < perftest_ctx->max_reqs; i++) {
+            do { ret = write_cq->try_dequeue(wc); } while (!ret) ;
+            lwlog_debug("received completion");
+            if (wc.status != WC_SUCCESS) {
+                lwlog_err("Received remote send with error");
+                return -1;
+            } else if (wc.opcode != WC_WRITE) {
+                lwlog_err("Received wrong message type!");
+                return -1;
+            }
+        }
+        // Issue the last write that indicates completion.
+        ret = rdmap_write(perftest_ctx->ctx, write_wr_end);
         do { ret = write_cq->try_dequeue(wc); } while (!ret) ;
-        lwlog_debug("received completion");
         if (wc.status != WC_SUCCESS) {
             lwlog_err("Received remote send with error");
             return -1;
@@ -96,18 +107,6 @@ int write_bw_iter(perftest_context *perftest_ctx) {
             lwlog_err("Received wrong message type!");
             return -1;
         }
-    }
-    // Issue the last write that indicates completion.
-    ret = rdmap_write(perftest_ctx->ctx, write_wr_end);
-    do { ret = write_cq->try_dequeue(wc); } while (!ret) ;
-    
-    // Server clears buffer and waits for writes.
-    if (!perftest_ctx->is_client) {
-        perftest_ctx->buf[0] = (char) 0;
-        lwlog_debug("waiting for write ...");
-        do { _mm_clflush(perftest_ctx->buf); } while (perftest_ctx->buf[0] == 0) ;
-        lwlog_debug("found write!");
-        perftest_ctx->buf[0] = 0;
     }
     return 0;
 }
