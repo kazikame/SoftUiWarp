@@ -35,7 +35,8 @@ Right now, to inter-operate with the existing SoftiWARP stack, you need to enabl
 definition in `common/common.h`, and re-build the project. Once you've done that, you can run the
 rping client like so:
 
-1. Run rping on a server
+1. Run rping on a server with an iWARP interface. Details on setting this up can be found 
+[here](https://gist.github.com/ksonbol/d09727079501832b4a9608eaee42f4e9).
 ```bash
 rping -d -s -a 10.10.1.2 -p 8888
 ```
