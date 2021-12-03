@@ -43,6 +43,26 @@
 #include "rdmap/rdmap.h"
 #include "perftest.h"
 
+static void print_help() {
+    printf("Usage: \n\
+    -h : Print this message. \n\
+    -c : Run as client. \n\
+    -s [IP] : If running as server, bind to this IP. \n\
+              If running as client, connect to this IP. \n\
+              Default 127.0.0.1. \n\
+    -p [PORT] : If running as server, listen on this port. \n\
+                If running as client, connect to this port. \n\
+                Default 9999. \n\
+    -b [BYTES] : Set the payload size to exchange. \n\
+                 Default 1024. \n\
+    -i [ITERS] : Set the number of iterations. \n\
+                 Defuault 1000. \n\
+    -r [MAX_REQS] : Set the max number of in-flight requests, only used for bandwidth tests. \n\
+Example: \n\
+    On server-side: ./read_lat -s 10.10.1.1 \n\
+    On client-side: ./read_lat -s 10.10.1.1 -c\n");
+}
+
 static int argparse(int argc, char **argv, struct perftest_context *c) {
     int opt;
     c->buf_size = DEFAULT_BUF_SIZE;
@@ -51,7 +71,7 @@ static int argparse(int argc, char **argv, struct perftest_context *c) {
     c->port = (char*) DEFAULT_PORT;
     c->is_client = false;
     c->max_reqs = DEFAULT_MAX_REQS;
-    while ((opt = getopt(argc, argv, "p:s:b:i:r:c")) != -1) {
+    while ((opt = getopt(argc, argv, "p:s:b:i:r:ch")) != -1) {
         switch (opt) {
           case 's':
             c->ip = optarg;
@@ -68,6 +88,9 @@ static int argparse(int argc, char **argv, struct perftest_context *c) {
           case 'c':
             c->is_client = true;
             break;
+          case 'h':
+            print_help();
+            exit(0);
           case 'r':
             c->max_reqs = atoi(optarg);
             break;
@@ -217,6 +240,7 @@ void perftest_run(int argc, char **argv,
     perftest_ctx.serverfd = -1;
     if (argparse(argc, argv, &perftest_ctx)) {
         lwlog_err("Failed to parse arguments!");
+        lwlog_notice("Run with -h to see command-line usage.");
         return;
     }
 
