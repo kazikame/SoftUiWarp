@@ -56,16 +56,10 @@ int write_lat_iter(perftest_context *perftest_ctx) {
     int ret;
     // Client clears buffer and waits to receive write.
     if (perftest_ctx->is_client) {
-#ifdef PERFTEST_TEST
-        // Clear the whole buffer if we're testing.
-        memset(perftest_ctx->buf, 0, perftest_ctx->buf_size);
-#else
-        // Only clear a byte if we're benchmarking.
-        perftest_ctx->buf[1] = (char) 0;
-#endif
         lwlog_debug("waiting for write at ...");
         do { _mm_clflush(&perftest_ctx->buf[1]); } while (perftest_ctx->buf[1] == 0) ;
         lwlog_debug("found write!");
+        perftest_ctx->buf[1]++;
 #ifdef PERFTEST_TEST
         for (int i = 0; i < perftest_ctx->buf_size; i++) {
             if (perftest_ctx->buf[i] != ((char) i)) {
@@ -98,6 +92,12 @@ int write_lat_iter(perftest_context *perftest_ctx) {
 
     // Server clears buffer and waits to receive write.
     if (!perftest_ctx->is_client) {
+        lwlog_debug("waiting for write ...");
+        do { _mm_clflush(&perftest_ctx->buf); } while (perftest_ctx->buf[1] == 1) ;
+        lwlog_debug("found write!");
+    }
+    /* Prepare for next iteration. */
+    if (perftest_ctx->is_client) {
 #ifdef PERFTEST_TEST
         // Clear the whole buffer if we're testing.
         memset(perftest_ctx->buf, 0, perftest_ctx->buf_size);
@@ -105,17 +105,8 @@ int write_lat_iter(perftest_context *perftest_ctx) {
         // Only clear a byte if we're benchmarking.
         perftest_ctx->buf[1] = (char) 0;
 #endif
-        lwlog_debug("waiting for write ...");
-        do { _mm_clflush(&perftest_ctx->buf); } while (perftest_ctx->buf[1] == 0) ;
-        lwlog_debug("found write!");
-#ifdef PERFTEST_TEST
-        for (int i = 0; i < perftest_ctx->buf_size; i++) {
-            if (perftest_ctx->buf[i] != ((char) i)) {
-                lwlog_err("Received incorrect value 0x%hhx for index %d!", perftest_ctx->buf[i], i);
-                return -1;
-            }
-        }
-#endif // PERFTEST_TEST
+    } else {
+        perftest_ctx->buf[1] = (char) 1;
     }
     return 0;
 }
