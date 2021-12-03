@@ -32,7 +32,7 @@
 struct sge write_sg;
 struct send_wr write_wr;
 
-char byte_end = (char) 0x42;
+uint32_t byte_end = 0xdeadbeef;
 struct sge write_sg_end;
 struct send_wr write_wr_end;
 
@@ -48,12 +48,15 @@ int write_bw_init(perftest_context *perftest_ctx, uint32_t lstag, struct send_da
     write_wr.wr.rdma.rkey = sd->stag;
     write_wr.wr.rdma.remote_addr = sd->offset;
     // Build ending write WR.
-    memcpy(&write_sg_end, &write_sg, sizeof(struct sge));
-    memcpy(&write_wr_end, &write_wr, sizeof(struct send_wr));
     write_sg_end.addr = (uint64_t) &byte_end;
-    write_sg_end.length = 1;
+    write_sg_end.length = 4;
+    write_sg_end.lkey = 0;
     write_wr_end.wr_id = 0xffffffff;
-    write_wr.sg_list = &write_sg_end;
+    write_wr_end.sg_list = &write_sg_end;
+    write_wr_end.num_sge = 1;
+    write_wr_end.opcode = RDMAP_RDMA_WRITE;
+    write_wr_end.wr.rdma.rkey = sd->stag;
+    write_wr_end.wr.rdma.remote_addr = sd->offset;
     if (perftest_ctx->is_client) {
         // Fill the buffer with incrementing values.
         for (int i = 0; i < perftest_ctx->buf_size; i++) {
@@ -69,10 +72,13 @@ int write_bw_iter(perftest_context *perftest_ctx) {
     int ret;
     if (!perftest_ctx->is_client) {
         lwlog_debug("waiting for write ...");
-        do { _mm_clflush(&perftest_ctx->buf[0]); } while (perftest_ctx->buf[0] == 0) ;
-        lwlog_debug("found write!");
+        do { 
+            _mm_clflush(&perftest_ctx->buf[0]); 
+            _mm_sfence();
+        } while (perftest_ctx->buf[0] == 0) ;
+        lwlog_debug("found write with value %hhx!", perftest_ctx->buf[0]);
         // Only clear a byte if we're benchmarking.
-        perftest_ctx->buf[0] = (char) 0;
+        ((uint32_t*)perftest_ctx->buf)[0] = 0;
     } else {
         // Write the buffer to the remote.
         lwlog_debug("issuing writes ...");

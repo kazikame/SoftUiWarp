@@ -72,7 +72,7 @@ void* rnic_recv(void* ctx_ptr)
         {
             case rdma_opcode::RDMAP_RDMA_WRITE: {
                 assert(ddp_is_tagged(ddp_message.hdr.bits));
-                lwlog_info("Someone wrote data at %p", ddp_message.tag_buf.data);
+                lwlog_info("Someone wrote %u bytes at %p", ddp_message.len, ddp_message.tag_buf.data);
                 //! do nothing :)
                 break;
             }
