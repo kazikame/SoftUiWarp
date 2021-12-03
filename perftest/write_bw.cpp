@@ -68,9 +68,9 @@ int write_bw_iter(perftest_context *perftest_ctx) {
     if (perftest_ctx->is_client) {
         perftest_ctx->buf[0] = (char) 0;
         lwlog_debug("waiting for write ...");
-        do { _mm_clflush(&perftest_ctx->buf); } while (perftest_ctx->buf[0] == 0) ;
-        perftest_ctx->buf[0] = 0;
+        do { _mm_clflush(perftest_ctx->buf); } while (perftest_ctx->buf[0] == 0) ;
         lwlog_debug("found write!");
+        perftest_ctx->buf[0] = 0;
     }
 
     // Issue all the large writes.
@@ -98,7 +98,6 @@ int write_bw_iter(perftest_context *perftest_ctx) {
         }
     }
     // Issue the last write that indicates completion.
-    write_sg.length = 1;
     ret = rdmap_write(perftest_ctx->ctx, write_wr_end);
     do { ret = write_cq->try_dequeue(wc); } while (!ret) ;
     
@@ -106,8 +105,9 @@ int write_bw_iter(perftest_context *perftest_ctx) {
     if (!perftest_ctx->is_client) {
         perftest_ctx->buf[0] = (char) 0;
         lwlog_debug("waiting for write ...");
-        do { _mm_clflush(&perftest_ctx->buf); } while (perftest_ctx->buf[0] == 0) ;
+        do { _mm_clflush(perftest_ctx->buf); } while (perftest_ctx->buf[0] == 0) ;
         lwlog_debug("found write!");
+        perftest_ctx->buf[0] = 0;
     }
     return 0;
 }
