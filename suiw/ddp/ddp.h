@@ -61,7 +61,7 @@ struct ddp_stream_context {
     std::unordered_map<__u32, tagged_buffer> tagged_buffers;
 };
 
-struct ddp_hdr {
+struct __attribute__((__packed__)) ddp_hdr {
     __u8 bits = 0;
 };
 
@@ -100,7 +100,7 @@ struct __attribute__((__packed__)) ddp_untagged_meta {
 
 struct ddp_message {
     struct ddp_hdr hdr;
-    union {
+    union  {
         struct ddp_tagged_meta tagged_metadata;
         struct ddp_untagged_meta untagged_metadata;
     };
@@ -109,6 +109,11 @@ struct ddp_message {
         struct tagged_buffer tag_buf;
     };
     int len;
+};
+
+struct __attribute__((__packed__)) ddp_packed_tagged {
+    struct ddp_hdr hdr;
+    struct ddp_tagged_meta tagged_metadata;
 };
 
 /**

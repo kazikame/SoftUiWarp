@@ -76,7 +76,7 @@ void* rnic_recv(void* ctx_ptr)
         if (unlikely(ret < 0))
         {
             lwlog_err("ddp_recv error, exiting");
-            return NULL;
+            return (void*)-1;
         }
         message.ctrl = (rdmap_ctrl*)((char *)&ddp_message.hdr + DDP_CTRL_SIZE);
         __u8 opcode = get_rdmap_op(message.ctrl->bits);
@@ -156,7 +156,7 @@ void* rnic_recv(void* ctx_ptr)
                 if (erased <= 0)
                 {
                     lwlog_err("Invalid STag in send w/ invalidate; terminating");
-                    return NULL;
+                    return (void*)-1;
                 }
                 //! fallover to SEND
             }
@@ -201,7 +201,6 @@ void* rnic_send(void* ctx_ptr)
     moodycamel::ConcurrentQueue<work_completion>* pending_cq = ctx->send_q->cq->pending_q;
 
     struct send_wr req;
-
     __u8 rdma_hdr = 1 << 6;
     struct work_completion wce;
     wce.src_qp = ctx->send_q->wq_num;
@@ -448,7 +447,7 @@ int rdma_post_recv(struct rdmap_stream_context* ctx, struct recv_wr& wr)
     ddp_post_recv(ctx->ddp_ctx, SEND_QN, buf, wr.num_sge);
 
     //! Add to queue
-    ctx->recv_q->recv_q->enqueue(std::move(wr));
+    ctx->recv_q->recv_q->enqueue(wr);
 
     return 0;
 }

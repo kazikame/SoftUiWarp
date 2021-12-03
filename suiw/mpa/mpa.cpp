@@ -342,6 +342,7 @@ int mpa_recv(int sockfd, struct siw_mpa_packet* info, int num_bytes)
     int tries = 0;
     do {
         rcvd += recv(sockfd, ((char*)info->ulpdu)+rcvd, num_bytes_to_read-rcvd, 0);
+        if (unlikely(rcvd <= 0)) break;
     } while (rcvd < num_bytes_to_read);
 
     if (unlikely(rcvd != num_bytes_to_read))

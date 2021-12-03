@@ -82,6 +82,7 @@ int ddp_send_tagged(struct ddp_stream_context* ctx, struct ddp_tagged_meta* next
     mpa_sge_list[sg_num].length = sizeof(hdr2);
     sg_num++;
 
+    __u64 ho_TO = ntohll(hdr2.TO);
     for (int i = 0; i < num_sge; i++)
     {
         int last_sge = i == (num_sge-1);
@@ -91,7 +92,7 @@ int ddp_send_tagged(struct ddp_stream_context* ctx, struct ddp_tagged_meta* next
 
         while (remaining_bytes > 0)
         {
-            int packet_len = remaining_bytes > EMSS ? EMSS : remaining_bytes;
+            int packet_len = remaining_bytes > MULPDU ? MULPDU : remaining_bytes;
 
             if (last_sge && packet_len == remaining_bytes)
             {
@@ -100,13 +101,14 @@ int ddp_send_tagged(struct ddp_stream_context* ctx, struct ddp_tagged_meta* next
             mpa_sge_list[sg_num].addr = (uint64_t) (sge_list[i].addr + (sge_list[i].length - remaining_bytes));
             mpa_sge_list[sg_num].length = packet_len;
             int ret = mpa_send(ctx->sockfd, mpa_sge_list, sg_num+1, 0);
-            if (ret < 0)
+            if (unlikely(ret < 0))
             {
                 lwlog_err("send failed");
                 return ret;
             }
             //! Increase offset
-            hdr2.TO += packet_len;
+            ho_TO += packet_len;
+            hdr2.TO = htonll(ho_TO);
             remaining_bytes -= packet_len;
         }
     }
@@ -142,11 +144,9 @@ int ddp_send_untagged(struct ddp_stream_context* ctx, struct ddp_untagged_meta* 
 
         //! Break each sge into MPA segments
         int remaining_bytes = sge_list[i].length;
-
         while (remaining_bytes > 0)
         {
-            int packet_len = remaining_bytes > EMSS ? EMSS : remaining_bytes;
-            
+            int packet_len = remaining_bytes > MULPDU ? MULPDU : remaining_bytes;
             if (last_sge && packet_len == remaining_bytes)
             {
                 hdr.bits |= DDP_FLAG_LAST;
@@ -171,7 +171,7 @@ int ddp_send_untagged(struct ddp_stream_context* ctx, struct ddp_untagged_meta* 
 
 void ddp_post_recv(struct ddp_stream_context* ctx, int qn, struct untagged_buffer* bufs, int num_bufs)
 {
-    if (qn < 0 || qn >= MAX_UNTAGGED_BUFFERS)
+    if (unlikely(qn < 0 || qn >= MAX_UNTAGGED_BUFFERS))
     {
         lwlog_err("qn is invalid %d", qn);
         return;
@@ -179,10 +179,11 @@ void ddp_post_recv(struct ddp_stream_context* ctx, int qn, struct untagged_buffe
 
     ctx->queues[qn].q->enqueue_bulk(bufs, num_bufs);
 }
+
 struct untagged_buffer_queue* ddp_check_untagged_hdr(struct ddp_stream_context* ctx, struct ddp_untagged_meta* hdr)
 {
     uint32_t qn = hdr->qn;
-    if (qn >= MAX_UNTAGGED_BUFFERS)
+    if (unlikely(qn >= MAX_UNTAGGED_BUFFERS))
     {
         lwlog_err("Invalid queue detected %d", qn);
         return NULL;
@@ -192,7 +193,7 @@ struct untagged_buffer_queue* ddp_check_untagged_hdr(struct ddp_stream_context* 
     struct untagged_buffer_queue* ut_q = &ctx->queues[qn];
 
     uint32_t msn = hdr->msn;
-    if (ut_q->msn > msn)
+    if (unlikely(ut_q->msn > msn))
     {
         lwlog_err("Invalid MSN detected %d (current %d)", msn, ut_q->msn);
         return NULL;
@@ -236,7 +237,7 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
         //! Get remaining header
         mpa_packet.ulpdu = (char*) &msg->tagged_metadata;
 
-        ret = mpa_recv(ctx->sockfd, &mpa_packet, sizeof(msg->tagged_metadata));
+        ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_TAGGED_HDR_SIZE);
         if (unlikely(ret < 0))
         {
             lwlog_err("ddp recv failed %d", ret);
@@ -267,12 +268,20 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
             if (unlikely(ret < 0)) return -1;
             
             //! Check if this was the last
-            if (msg->tagged_metadata.rsvdULP1 & DDP_FLAG_LAST) break;
+            if (msg->hdr.bits & DDP_FLAG_LAST) {
+                break;
+            }
 
             //! Get next header
-            mpa_packet.ulpdu = (char *) msg;
-            ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_CTRL_SIZE + DDP_TAGGED_HDR_SIZE);
+            //! TODO: Potential for optimization using different structs
+            mpa_packet.bytes_rcvd = 0;
+            mpa_packet.ulpdu = (char*) &msg->hdr.bits;
+            ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_CTRL_SIZE);
+            mpa_packet.ulpdu = (char*) &msg->tagged_metadata;
+            ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_TAGGED_HDR_SIZE);
+
             if (unlikely(ret < 0)) return -1;
+
             mpa_payload_len = mpa_packet.ulpdu_len - (DDP_CTRL_SIZE + DDP_TAGGED_HDR_SIZE);
             msg->tagged_metadata.TO = ntohll(msg->tagged_metadata.TO);
             //! TODO: Check TO/Stag validity
@@ -332,11 +341,15 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
             if (unlikely(ret < 0)) return -1;
             
             //! Check if this was the last
-            if (msg->untagged_metadata.rsvdULP1 & DDP_FLAG_LAST) break;
+            if (msg->hdr.bits & DDP_FLAG_LAST) break;
 
             //! Get next header
-            mpa_packet.ulpdu = (char *) msg;
-            ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_CTRL_SIZE + DDP_UNTAGGED_HDR_SIZE);
+            mpa_packet.bytes_rcvd = 0;
+            mpa_packet.ulpdu = (char *) &msg->hdr.bits;
+            ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_CTRL_SIZE);
+
+            mpa_packet.ulpdu = (char *) &msg->untagged_metadata;
+            ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_UNTAGGED_HDR_SIZE);
             if (unlikely(ret < 0)) return -1;
             mpa_payload_len = mpa_packet.ulpdu_len - (DDP_CTRL_SIZE + DDP_UNTAGGED_HDR_SIZE);
 
@@ -369,18 +382,17 @@ int deregister_tagged_buffer(struct ddp_stream_context* ctx, struct stag_t* stag
 struct tagged_buffer* ddp_check_stag(struct ddp_stream_context* ctx, struct ddp_tagged_meta* hdr)
 {
     auto it = ctx->tagged_buffers.find(hdr->tag);
-    if (it == ctx->tagged_buffers.end())
+    if (unlikely(it == ctx->tagged_buffers.end()))
     {
         lwlog_err("ddp recv found invalid tag");
         return NULL;
     }
 
-    if ((uint64_t)it->second.data > hdr->TO || (uint64_t)it->second.data + it->second.len < hdr->TO)
+    if (unlikely((uint64_t)it->second.data > hdr->TO || (uint64_t)it->second.data + it->second.len < hdr->TO))
     {
-        lwlog_err("invalid offset");
+        lwlog_err("invalid offset TO: %llu, data: %lu, len: %lu", hdr->TO, (uint64_t)it->second.data, it->second.len);
         return NULL;
     }
     //! TODO: Do access control
-
     return &it->second;
 }

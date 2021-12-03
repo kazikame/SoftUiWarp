@@ -287,7 +287,7 @@ void perftest_run(int argc, char **argv,
     // Create Tagged Buffer for read
     tagged_buffer tg_buf;
     tg_buf.data = (char*)perftest_ctx.buf;
-    tg_buf.len = sizeof(perftest_ctx.buf);
+    tg_buf.len = perftest_ctx.buf_size;
 
     register_tagged_buffer(ctx->ddp_ctx, &tg_buf);
     __u32 stag = tg_buf.stag.tag;
@@ -324,6 +324,7 @@ void perftest_run(int argc, char **argv,
             lwlog_err("failed to issue recv for server completion!");
         }
         // Send remote_addr and rkey to server.
+        sleep(1);
         if (rdmap_send_data(&perftest_ctx, (void*) &my_sd, sizeof(struct send_data), send_wr) < 0) {
             lwlog_err("failed to send client info!");
         }
@@ -337,6 +338,7 @@ void perftest_run(int argc, char **argv,
         if (rdmap_recv_issue(&perftest_ctx, (void*) &their_sd, sizeof(struct send_data), recv_wr) < 0) {
             lwlog_err("failed to issue recv for client info!");
         }
+        sleep(1);
         // Send remote_addr and rkey to server.
         if (rdmap_send_data(&perftest_ctx, (void*) &my_sd, sizeof(struct send_data), send_wr) < 0) {
             lwlog_err("failed to send server info!");
