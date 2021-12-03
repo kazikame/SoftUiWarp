@@ -258,32 +258,33 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
         //! Get entire payload
         uint32_t orig_stag = msg->tagged_metadata.tag;
         uint64_t orig_TO = msg->tagged_metadata.TO;
+
+        struct ddp_hdr_packed packed_hdr;
+        packed_hdr.hdr.bits = msg->hdr.bits;
+        packed_hdr.tagged_metadata.TO = msg->tagged_metadata.TO;
         while(true)
         {
             //! Copy current payload to the right path
-            mpa_packet.ulpdu = (char *) msg->tagged_metadata.TO;
+            mpa_packet.ulpdu = (char *) packed_hdr.tagged_metadata.TO;
             ret = mpa_recv(ctx->sockfd, &mpa_packet, mpa_payload_len);
             ddp_payload_len += mpa_payload_len;
             
             if (unlikely(ret < 0)) return -1;
             
             //! Check if this was the last
-            if (msg->hdr.bits & DDP_FLAG_LAST) {
+            if (packed_hdr.hdr.bits & DDP_FLAG_LAST) {
                 break;
             }
 
             //! Get next header
-            //! TODO: Potential for optimization using different structs
             mpa_packet.bytes_rcvd = 0;
-            mpa_packet.ulpdu = (char*) &msg->hdr.bits;
-            ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_CTRL_SIZE);
-            mpa_packet.ulpdu = (char*) &msg->tagged_metadata;
-            ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_TAGGED_HDR_SIZE);
+            mpa_packet.ulpdu = (char*) &packed_hdr;
+            ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_CTRL_SIZE + DDP_TAGGED_HDR_SIZE);
 
             if (unlikely(ret < 0)) return -1;
 
             mpa_payload_len = mpa_packet.ulpdu_len - (DDP_CTRL_SIZE + DDP_TAGGED_HDR_SIZE);
-            msg->tagged_metadata.TO = ntohll(msg->tagged_metadata.TO);
+            packed_hdr.tagged_metadata.TO = ntohll(packed_hdr.tagged_metadata.TO);
             //! TODO: Check TO/Stag validity
         }
 
@@ -331,29 +332,30 @@ int ddp_recv(struct ddp_stream_context* ctx, struct ddp_message* msg)
             lwlog_err("untagged buffer queue is empty");
         }
 
+        struct ddp_hdr_packed packed_hdr;
+        packed_hdr.hdr.bits = msg->hdr.bits;
+        packed_hdr.untagged_metadata.mo = msg->untagged_metadata.mo;
         //! Get entire payload
         while(true)
         {
             //! Copy current payload to the right path
-            mpa_packet.ulpdu = (char *) ((uint64_t)msg->untag_buf.data + msg->untagged_metadata.mo);
+            mpa_packet.ulpdu = (char *) ((uint64_t)msg->untag_buf.data + packed_hdr.untagged_metadata.mo);
             ret = mpa_recv(ctx->sockfd, &mpa_packet, mpa_payload_len);
             ddp_payload_len += mpa_payload_len;
             if (unlikely(ret < 0)) return -1;
             
             //! Check if this was the last
-            if (msg->hdr.bits & DDP_FLAG_LAST) break;
+            if (packed_hdr.hdr.bits & DDP_FLAG_LAST) break;
 
             //! Get next header
             mpa_packet.bytes_rcvd = 0;
-            mpa_packet.ulpdu = (char *) &msg->hdr.bits;
-            ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_CTRL_SIZE);
+            mpa_packet.ulpdu = (char *) &packed_hdr;
+            ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_CTRL_SIZE + DDP_UNTAGGED_HDR_SIZE);
 
-            mpa_packet.ulpdu = (char *) &msg->untagged_metadata;
-            ret = mpa_recv(ctx->sockfd, &mpa_packet, DDP_UNTAGGED_HDR_SIZE);
             if (unlikely(ret < 0)) return -1;
             mpa_payload_len = mpa_packet.ulpdu_len - (DDP_CTRL_SIZE + DDP_UNTAGGED_HDR_SIZE);
 
-            msg->untagged_metadata.mo = ntohl(msg->untagged_metadata.mo);
+            packed_hdr.untagged_metadata.mo = ntohl(packed_hdr.untagged_metadata.mo);
             //! TODO: Check QN/MSN/MO validity
         }
 

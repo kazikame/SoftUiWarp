@@ -111,9 +111,12 @@ struct ddp_message {
     int len;
 };
 
-struct __attribute__((__packed__)) ddp_packed_tagged {
+struct __attribute__((__packed__)) ddp_hdr_packed {
     struct ddp_hdr hdr;
-    struct ddp_tagged_meta tagged_metadata;
+    union {
+        struct ddp_tagged_meta tagged_metadata;
+        struct ddp_untagged_meta untagged_metadata;
+    };
 };
 
 /**
